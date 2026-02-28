@@ -1,0 +1,154 @@
+%-------------------------
+% Resume in LaTeX (Jake's Resume Template)
+% Author: Jake Gutierrez (Modified for AI Job Agent)
+% License: MIT
+%------------------------
+
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\input{glyphtounicode}
+
+%----------FONT OPTIONS----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.5in}
+\addtolength{\textheight}{1.0in}
+
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+% Sections formatting
+\titleformat{\section}{
+  \vspace{-4pt}\scshape\raggedright\large
+}{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
+
+% Ensure generated pdf is machine readable/ATS parsable
+\pdfgentounicode=1
+
+%-------------------------
+% Custom commands
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    {#1 \vspace{-2pt}}
+  }
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-2pt}\item
+    \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & #2 \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeSubSubheading}[2]{
+    \item
+    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
+      \textit{\small#1} & \textit{\small #2} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
+      \small#1 & #2 \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-4pt}}
+
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.15in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+    \textbf{\Huge \scshape Sagnik Kundu} \\ \vspace{1pt}
+    \small +91-XXXXXXXXXX $|$ \href{mailto:sagnik@example.com}{\underline{sagnik@example.com}} $|$
+    \href{https://www.linkedin.com/in/sagnik-kundu-77a94b357}{\underline{LinkedIn}} $|$
+    \href{https://github.com/sagnikkundu}{\underline{GitHub}}
+\end{center}
+
+%-----------EDUCATION-----------
+\section{Education}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {KIIT University}{Bhubaneswar, India}
+      {Bachelor of Technology in Computer Science}{2023 -- 2027}
+  \resumeSubHeadingListEnd
+
+%-----------EXPERIENCE-----------
+\section{Experience}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {Software Engineering Intern}{Jun. 2025 -- Present}
+      {Your Company Name}{Location}
+      \resumeItemListStart
+        \resumeItem{Developed and maintained web applications using modern frameworks and tools}
+        \resumeItem{Collaborated with cross-functional teams to deliver high-quality software solutions}
+        \resumeItem{Implemented RESTful APIs and integrated third-party services}
+      \resumeItemListEnd
+  \resumeSubHeadingListEnd
+
+%-----------PROJECTS-----------
+\section{Projects}
+    \resumeSubHeadingListStart
+      \resumeProjectHeading
+          {\textbf{AI Job Agent} $|$ \emph{Python, FastAPI, Google Gemini, Playwright}}{2025}
+          \resumeItemListStart
+            \resumeItem{Built an AI-powered automation system that searches 15+ ATS platforms for job vacancies}
+            \resumeItem{Developed resume analysis engine using Google Gemini AI for JD-resume matching}
+            \resumeItem{Implemented automated application submission with Playwright browser automation}
+            \resumeItem{Created a modern web dashboard for real-time job search monitoring and control}
+          \resumeItemListEnd
+      \resumeProjectHeading
+          {\textbf{Electricity Theft Detection} $|$ \emph{Python, Machine Learning, SMOTE, XGBoost}}{2025}
+          \resumeItemListStart
+            \resumeItem{Developed ML pipeline for detecting electricity theft using smart meter data}
+            \resumeItem{Applied SMOTE oversampling to handle class imbalance, improving recall by 35\%}
+            \resumeItem{Implemented CI/CD pipeline with GitHub Actions for automated testing and deployment}
+          \resumeItemListEnd
+    \resumeSubHeadingListEnd
+
+%-----------TECHNICAL SKILLS-----------
+\section{Technical Skills}
+ \resumeSubHeadingListStart
+    \item{
+     \textbf{Languages}{: Python, JavaScript, Java, SQL, HTML/CSS, LaTeX} \\
+     \textbf{Frameworks}{: FastAPI, React, Node.js, Flask, Django} \\
+     \textbf{Developer Tools}{: Git, Docker, VS Code, Google Cloud, GitHub Actions} \\
+     \textbf{Libraries}{: pandas, NumPy, scikit-learn, Matplotlib, Playwright, BeautifulSoup}
+    }
+ \resumeSubHeadingListEnd
+
+%-------------------------------------------
+\end{document}

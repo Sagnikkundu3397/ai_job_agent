@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Job Agent — Automated Job Applications</title>
+    <meta name="description"
+        content="AI-powered job search automation that finds vacancies, tailors your resume, and auto-applies across 15+ ATS platforms.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+
+<body>
+    <!-- ===== BACKGROUND PARTICLES ===== -->
+    <div class="bg-particles" id="particles"></div>
+
+    <!-- ===== HEADER ===== -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                        <path d="M2 17l10 5 10-5" />
+                        <path d="M2 12l10 5 10-5" />
+                    </svg>
+                </div>
+                <span class="logo-text">AI Job Agent</span>
+            </div>
+        </div>
+        <div class="header-center">
+            <div class="stats-bar" id="statsBar">
+                <div class="stat-item">
+                    <span class="stat-value" id="statJobs">0</span>
+                    <span class="stat-label">Jobs Found</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-value" id="statApplied">0</span>
+                    <span class="stat-label">Applied</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-value" id="statPending">0</span>
+                    <span class="stat-label">Pending</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-value" id="statScore">0%</span>
+                    <span class="stat-label">Avg Match</span>
+                </div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="status-indicator" id="apiStatus">
+                <div class="status-dot"></div>
+                <span>Checking...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="main-content">
+
+        <!-- ===== TAB NAVIGATION ===== -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="search" id="tabSearch">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                </svg>
+                Job Search
+            </button>
+            <button class="tab-btn" data-tab="resume" id="tabResume">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14,2 14,8 20,8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+                Resume
+            </button>
+            <button class="tab-btn" data-tab="autoapply" id="tabAutoApply">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22,4 12,14.01 9,11.01" />
+                </svg>
+                Auto-Apply
+            </button>
+            <button class="tab-btn" data-tab="history" id="tabHistory">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12,6 12,12 16,14" />
+                </svg>
+                History
+            </button>
+        </nav>
+
+        <!-- ===== SEARCH TAB ===== -->
+        <section class="tab-content active" id="searchTab">
+            <div class="search-panel">
+                <div class="panel-header">
+                    <h2>🔍 Search Jobs Across ATS Platforms</h2>
+                    <p class="panel-desc">Find vacancies on Greenhouse, Lever, Workday, and 12+ more platforms</p>
+                </div>
+                <div class="search-form">
+                    <div class="form-row">
+                        <div class="form-group flex-2">
+                            <label for="jobTitle">Job Title / Keywords</label>
+                            <input type="text" id="jobTitle" list="jobSuggestions"
+                                placeholder="e.g., Software Engineer Intern, Data Analyst" autocomplete="off">
+                            <datalist id="jobSuggestions">
+                                <option value="Software Engineer">
+                                <option value="Frontend Developer">
+                                <option value="Backend Developer">
+                                <option value="Full Stack Developer">
+                                <option value="AI / ML Engineer">
+                                <option value="Data Scientist">
+                                <option value="Data Analyst">
+                                <option value="Product Manager">
+                                <option value="UX/UI Designer">
+                                <option value="DevOps Engineer">
+                                <option value="Cloud Architect">
+                                <option value="Cybersecurity Analyst">
+                            </datalist>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="location">Location</label>
+                            <input type="text" id="location" placeholder="e.g., Bangalore, remote" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="numResults">Max Results</label>
+                            <select id="numResults">
+                                <option value="10">10</option>
+                                <option value="20" selected>20</option>
+                                <option value="30">30</option>
+                                <option value="50">50</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="dateFilter">Date Posted</label>
+                            <select id="dateFilter">
+                                <option value="">Any time</option>
+                                <option value="d">Past 24 hours</option>
+                                <option value="w">Past week</option>
+                                <option value="m">Past month</option>
+                            </select>
+                        </div>
+                        <div class="form-group flex-2">
+                            <label>Actions</label>
+                            <div class="btn-group">
+                                <button class="btn btn-primary btn-glow" id="searchBtn" onclick="searchJobs()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <circle cx="11" cy="11" r="8" />
+                                        <path d="m21 21-4.35-4.35" />
+                                    </svg>
+                                    Search Jobs
+                                </button>
+                                <button class="btn btn-outline" id="clearBtn" onclick="clearSearch()">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ATS Platform Toggles -->
+            <div class="platforms-panel">
+                <div class="panel-header-small">
+                    <h3>ATS Platforms</h3>
+                    <button class="btn btn-sm btn-ghost" onclick="toggleAllPlatforms()">Toggle All</button>
+                </div>
+                <div class="platform-chips" id="platformChips">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Job Results -->
+            <div class="results-panel" id="resultsPanel">
+                <div class="panel-header-small">
+                    <h3 id="resultsTitle">Results</h3>
+                    <div class="results-actions">
+                        <button class="btn btn-sm btn-outline" onclick="analyzeAll()" id="analyzeAllBtn"
+                            style="display:none;">Analyze All</button>
+                        <button class="btn btn-sm btn-primary" onclick="selectAllJobs()" id="selectAllBtn"
+                            style="display:none;">Select All</button>
+                    </div>
+                </div>
+                <div class="job-grid" id="jobGrid">
+                    <div class="empty-state">
+                        <div class="empty-icon">🚀</div>
+                        <h3>Ready to find your next opportunity</h3>
+                        <p>Enter a job title and hit search to discover vacancies across 15+ ATS platforms</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== RESUME TAB ===== -->
+        <section class="tab-content" id="resumeTab">
+            <div class="resume-panel">
+                <div class="panel-header">
+                    <h2>📄 Resume Management</h2>
+                    <p class="panel-desc">Upload your LaTeX resume (Jake's template) for AI analysis and tailoring</p>
+                </div>
+                <div class="resume-upload-area" id="resumeDropZone">
+                    <div class="upload-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.5">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17,8 12,3 7,8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                    </div>
+                    <h3>Drop your resume here</h3>
+                    <p>Supports .tex files (Jake's Resume template)</p>
+                    <input type="file" id="resumeFile" accept=".tex,.txt" style="display:none;">
+                    <button class="btn btn-primary" onclick="document.getElementById('resumeFile').click()">Choose
+                        File</button>
+                </div>
+                <div class="resume-status" id="resumeStatus" style="display:none;">
+                    <div class="status-card success">
+                        <div class="status-icon">✅</div>
+                        <div class="status-info">
+                            <h4 id="resumeFileName">Resume loaded</h4>
+                            <p id="resumeSections">Sections: Loading...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="resume-preview" id="resumePreview" style="display:none;">
+                    <h3>Resume Preview</h3>
+                    <pre id="resumePreviewText"></pre>
+                </div>
+            </div>
+
+            <!-- Analysis Results -->
+            <div class="analysis-panel" id="analysisPanel" style="display:none;">
+                <div class="panel-header">
+                    <h2>🤖 AI Analysis Results</h2>
+                </div>
+                <div id="analysisContent">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== AUTO-APPLY TAB ===== -->
+        <section class="tab-content" id="autoapplyTab">
+            <div class="autoapply-panel">
+                <div class="panel-header">
+                    <h2>⚡ Auto-Apply Control Center</h2>
+                    <p class="panel-desc">Configure and launch automated job applications</p>
+                </div>
+                <div class="autoapply-config">
+                    <div class="config-card">
+                        <div class="config-icon">🎯</div>
+                        <h3>Applications Limit</h3>
+                        <p>How many jobs should the AI agent apply to?</p>
+                        <div class="range-container">
+                            <input type="range" id="maxApplications" min="1" max="25" value="5"
+                                oninput="updateRangeValue()">
+                            <div class="range-value" id="rangeValue">5</div>
+                        </div>
+                    </div>
+                    <div class="config-card">
+                        <div class="config-icon">📋</div>
+                        <h3>Selected Jobs</h3>
+                        <p id="selectedJobsCount">0 jobs selected for auto-apply</p>
+                        <div class="selected-jobs-list" id="selectedJobsList">
+                            <p class="text-muted">Select jobs from the Search tab first</p>
+                        </div>
+                    </div>
+                    <div class="config-card">
+                        <div class="config-icon">👤</div>
+                        <h3>Your Info</h3>
+                        <div class="mini-form">
+                            <input type="text" id="cfgName" placeholder="Full Name">
+                            <input type="email" id="cfgEmail" placeholder="Email">
+                            <input type="tel" id="cfgPhone" placeholder="Phone">
+                            <input type="url" id="cfgLinkedIn" placeholder="LinkedIn URL">
+                        </div>
+                    </div>
+                </div>
+                <div class="autoapply-actions">
+                    <button class="btn btn-large btn-primary btn-glow" id="startApplyBtn" onclick="startAutoApply()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <polygon points="5,3 19,12 5,21 5,3" />
+                        </svg>
+                        Start Auto-Apply
+                    </button>
+                    <button class="btn btn-large btn-danger" id="stopApplyBtn" onclick="stopAutoApply()"
+                        style="display:none;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="6" y="6" width="12" height="12" />
+                        </svg>
+                        Stop
+                    </button>
+                </div>
+
+                <!-- Progress -->
+                <div class="progress-panel" id="progressPanel" style="display:none;">
+                    <div class="progress-header">
+                        <h3>Auto-Apply Progress</h3>
+                        <span class="progress-status" id="progressStatus">Running...</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                    </div>
+                    <p class="progress-detail" id="progressDetail">Initializing...</p>
+                    <div class="progress-log" id="progressLog"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== HISTORY TAB ===== -->
+        <section class="tab-content" id="historyTab">
+            <div class="history-panel">
+                <div class="panel-header">
+                    <h2>📊 Application History</h2>
+                    <p class="panel-desc">Track all your submitted applications and their status</p>
+                </div>
+                <div class="history-table-container">
+                    <table class="history-table" id="historyTable">
+                        <thead>
+                            <tr>
+                                <th>Job Title</th>
+                                <th>Company</th>
+                                <th>Status</th>
+                                <th>Match Score</th>
+                                <th>Applied Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody">
+                            <tr class="empty-row">
+                                <td colspan="6">
+                                    <div class="empty-state-inline">
+                                        <p>No applications yet. Start by searching for jobs!</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ===== TOAST NOTIFICATIONS ===== -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>
