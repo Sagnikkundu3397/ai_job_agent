@@ -76,6 +76,7 @@ async def startup():
 class SearchRequest(BaseModel):
     job_title: str
     location: str = ""
+    job_type: str = ""  # e.g., 'Remote', 'Internship', 'Hybrid'
     num_results: int = 20
     date_filter: str = ""  # 'd', 'w', 'm', 'y'
     platforms: Optional[List[str]] = None
@@ -134,6 +135,7 @@ async def search_jobs(request: SearchRequest):
     results = await serpapi_client.search(
         job_title=request.job_title,
         location=request.location,
+        job_type=request.job_type,
         num_results=request.num_results,
         date_filter=request.date_filter,
         platforms=request.platforms,

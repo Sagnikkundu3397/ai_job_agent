@@ -28,6 +28,7 @@ class SerpAPIClient:
         self,
         job_title: str,
         location: str = "",
+        job_type: str = "",
         exclude_terms: list = None,
         platforms: list = None,
     ) -> str:
@@ -46,6 +47,9 @@ class SerpAPIClient:
             else:
                 query += f' "{locations[0]}"'
 
+        if job_type:
+            query += f' "{job_type}"'
+
         if exclude_terms:
             for term in exclude_terms:
                 query += f" -{term}"
@@ -56,6 +60,7 @@ class SerpAPIClient:
         self,
         job_title: str,
         location: str = "",
+        job_type: str = "",
         num_results: int = 20,
         date_filter: str = "",
         platforms: list = None,
@@ -75,7 +80,7 @@ class SerpAPIClient:
         Returns:
             List of job result dicts with title, link, snippet, platform
         """
-        query = self._build_search_query(job_title, location, exclude_terms, platforms)
+        query = self._build_search_query(job_title, location, job_type, exclude_terms, platforms)
 
         all_results = []
         start = 0

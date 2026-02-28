@@ -112,21 +112,43 @@
                         <div class="form-group flex-2">
                             <label for="jobTitle">Job Title / Keywords</label>
                             <input type="text" id="jobTitle" list="jobSuggestions"
-                                placeholder="e.g., Software Engineer Intern, Data Analyst" autocomplete="off">
+                                placeholder="e.g., AI Engineer, Data Scientist" autocomplete="off">
                             <datalist id="jobSuggestions">
+                                <!-- AI & ML Roles -->
+                                <option value="AI / ML Engineer">
+                                <option value="Artificial Intelligence Engineer">
+                                <option value="Machine Learning Engineer">
+                                <option value="Deep Learning Engineer">
+                                <option value="NLP Engineer">
+                                <option value="Computer Vision Engineer">
+                                <option value="AI Researcher">
+                                <option value="Generative AI Engineer">
+                                    <!-- Data Roles -->
+                                <option value="Data Scientist">
+                                <option value="Data Analyst">
+                                <option value="Data Engineer">
+                                    <!-- Software Engineering -->
                                 <option value="Software Engineer">
                                 <option value="Frontend Developer">
                                 <option value="Backend Developer">
                                 <option value="Full Stack Developer">
-                                <option value="AI / ML Engineer">
-                                <option value="Data Scientist">
-                                <option value="Data Analyst">
-                                <option value="Product Manager">
-                                <option value="UX/UI Designer">
+                                    <!-- Other IT Roles -->
                                 <option value="DevOps Engineer">
                                 <option value="Cloud Architect">
                                 <option value="Cybersecurity Analyst">
+                                <option value="Product Manager">
+                                <option value="UX/UI Designer">
                             </datalist>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="jobType">Job Type</label>
+                            <select id="jobType">
+                                <option value="" selected>Any Type</option>
+                                <option value="Remote">Remote</option>
+                                <option value="Internship">Internship</option>
+                                <option value="Hybrid">Hybrid</option>
+                                <option value="Full Time">Full-Time</option>
+                            </select>
                         </div>
                         <div class="form-group flex-1">
                             <label for="location">Location</label>

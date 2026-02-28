@@ -33,6 +33,7 @@ state.allPlatforms.forEach(p => state.activePlatforms.add(p));
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initPlatformChips();
+    initAutocomplete();
     initResumeUpload();
     checkApiHealth();
     loadStats();
@@ -61,11 +62,11 @@ function switchTab(tabId) {
     // Deactivate all
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    
+
     // Activate selected
     document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
     document.getElementById(`${tabId}Tab`).classList.add('active');
-    
+
     // Load data for specific tabs
     if (tabId === 'history') loadHistory();
 }
@@ -116,7 +117,7 @@ function togglePlatform(el, domain) {
 function toggleAllPlatforms() {
     const chips = document.querySelectorAll('.platform-chip');
     const allActive = state.activePlatforms.size === state.allPlatforms.length;
-    
+
     chips.forEach(chip => {
         const domain = chip.dataset.domain;
         if (allActive) {
@@ -126,6 +127,50 @@ function toggleAllPlatforms() {
             state.activePlatforms.add(domain);
             chip.classList.add('active');
         }
+    });
+}
+
+
+// ========================
+// Autocomplete
+// ========================
+
+const JOB_SUGGESTIONS = [
+    // AI / ML / Data
+    "AI / ML Engineer", "Artificial Intelligence Engineer", "Machine Learning Engineer",
+    "Data Scientist", "Data Analyst", "Data Engineer", "Deep Learning Engineer",
+    "NLP Engineer", "Computer Vision Engineer", "Prompt Engineer",
+    // Software Eng
+    "Software Engineer", "Software Developer", "Frontend Developer", "Backend Developer",
+    "Full Stack Developer", "Mobile Developer", "iOS Developer", "Android Developer",
+    // Cloud / DevOps
+    "DevOps Engineer", "Cloud Architect", "Cloud Engineer", "Site Reliability Engineer (SRE)",
+    // Security / Network
+    "Cybersecurity Analyst", "Security Engineer", "Network Engineer",
+    // Product / Design
+    "Product Manager", "Project Manager", "UX/UI Designer", "Product Designer",
+    // QA / Testing
+    "QA Engineer", "Automation Tester"
+];
+
+function initAutocomplete() {
+    const input = document.getElementById('jobTitle');
+    const datalist = document.getElementById('jobSuggestions');
+
+    input.addEventListener('input', function () {
+        const val = this.value.toLowerCase().trim();
+        datalist.innerHTML = '';
+
+        if (!val) return;
+
+        // Find matching job roles (case-insensitive substring match)
+        const matches = JOB_SUGGESTIONS.filter(job => job.toLowerCase().includes(val));
+
+        matches.forEach(match => {
+            const option = document.createElement('option');
+            option.value = match;
+            datalist.appendChild(option);
+        });
     });
 }
 
@@ -142,6 +187,7 @@ async function searchJobs() {
     }
 
     const location = document.getElementById('location').value.trim();
+    const jobType = document.getElementById('jobType').value;
     const numResults = parseInt(document.getElementById('numResults').value);
     const dateFilter = document.getElementById('dateFilter').value;
 
@@ -156,6 +202,7 @@ async function searchJobs() {
             body: JSON.stringify({
                 job_title: jobTitle,
                 location: location,
+                job_type: jobType,
                 num_results: numResults,
                 date_filter: dateFilter,
                 platforms: Array.from(state.activePlatforms),
@@ -206,7 +253,7 @@ function clearSearch() {
 function renderJobResults(jobs) {
     const grid = document.getElementById('jobGrid');
     const title = document.getElementById('resultsTitle');
-    
+
     if (!jobs.length) {
         grid.innerHTML = `
             <div class="empty-state">
@@ -226,7 +273,7 @@ function renderJobResults(jobs) {
         const score = job.match_score || 0;
         const scoreClass = score >= 70 ? 'high' : score >= 40 ? 'medium' : score > 0 ? 'low' : 'none';
         const isSelected = state.selectedJobs.has(job.id);
-        
+
         return `
             <div class="job-card ${isSelected ? 'selected' : ''}" id="job-${job.id}" onclick="toggleJobSelection(${job.id})">
                 <div class="job-checkbox"></div>
@@ -276,16 +323,16 @@ function toggleJobSelection(jobId) {
     } else {
         state.selectedJobs.add(jobId);
     }
-    
+
     const card = document.getElementById(`job-${jobId}`);
     if (card) card.classList.toggle('selected');
-    
+
     updateSelectedJobsUI();
 }
 
 function selectAllJobs() {
     const allSelected = state.selectedJobs.size === state.jobs.length;
-    
+
     state.jobs.forEach(job => {
         if (allSelected) {
             state.selectedJobs.delete(job.id);
@@ -298,7 +345,7 @@ function selectAllJobs() {
             else card.classList.add('selected');
         }
     });
-    
+
     updateSelectedJobsUI();
 }
 
@@ -306,9 +353,9 @@ function updateSelectedJobsUI() {
     const count = state.selectedJobs.size;
     const countEl = document.getElementById('selectedJobsCount');
     const listEl = document.getElementById('selectedJobsList');
-    
+
     countEl.textContent = `${count} job${count !== 1 ? 's' : ''} selected for auto-apply`;
-    
+
     if (count === 0) {
         listEl.innerHTML = '<p class="text-muted">Select jobs from the Search tab first</p>';
     } else {
@@ -330,24 +377,24 @@ function updateSelectedJobsUI() {
 function initResumeUpload() {
     const dropZone = document.getElementById('resumeDropZone');
     const fileInput = document.getElementById('resumeFile');
-    
+
     // Drag and drop
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropZone.classList.add('drag-over');
     });
-    
+
     dropZone.addEventListener('dragleave', () => {
         dropZone.classList.remove('drag-over');
     });
-    
+
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
         const files = e.dataTransfer.files;
         if (files.length) uploadResume(files[0]);
     });
-    
+
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length) uploadResume(e.target.files[0]);
     });
@@ -364,7 +411,7 @@ async function uploadResume(file) {
 
     try {
         showToast('Uploading resume...', 'info');
-        
+
         const response = await fetch(`${API_BASE}/api/resume/upload`, {
             method: 'POST',
             body: formData
@@ -378,13 +425,13 @@ async function uploadResume(file) {
         }
 
         state.currentResumePath = data.path;
-        
+
         // Show status
         document.getElementById('resumeStatus').style.display = 'block';
         document.getElementById('resumeFileName').textContent = file.name;
-        document.getElementById('resumeSections').textContent = 
+        document.getElementById('resumeSections').textContent =
             `Sections: ${(data.sections || []).join(', ')}`;
-        
+
         // Show preview
         if (data.preview) {
             document.getElementById('resumePreview').style.display = 'block';
@@ -433,7 +480,7 @@ async function analyzeJob(jobId) {
         // Show analysis results
         showAnalysis(data);
         switchTab('resume');
-        showToast(`Match score: ${data.analysis.match_score}%`, 
+        showToast(`Match score: ${data.analysis.match_score}%`,
             data.analysis.match_score >= 70 ? 'success' : 'warning');
 
     } catch (err) {
@@ -442,7 +489,7 @@ async function analyzeJob(jobId) {
 }
 
 async function analyzeAll() {
-    const jobsToAnalyze = state.selectedJobs.size > 0 
+    const jobsToAnalyze = state.selectedJobs.size > 0
         ? state.jobs.filter(j => state.selectedJobs.has(j.id))
         : state.jobs.slice(0, 5);
 
@@ -679,14 +726,14 @@ function updateProgressUI(progress) {
     const detail = document.getElementById('progressDetail');
     const log = document.getElementById('progressLog');
 
-    const pct = progress.total > 0 
-        ? Math.round((progress.completed / progress.total) * 100) 
+    const pct = progress.total > 0
+        ? Math.round((progress.completed / progress.total) * 100)
         : 0;
 
     bar.style.width = `${pct}%`;
     status.textContent = progress.status;
-    detail.textContent = progress.current_job 
-        ? `Processing: ${progress.current_job}` 
+    detail.textContent = progress.current_job
+        ? `Processing: ${progress.current_job}`
         : `${progress.completed}/${progress.total} completed`;
 
     if (progress.results) {
