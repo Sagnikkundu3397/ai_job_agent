@@ -67,7 +67,26 @@ class ResumeTailor:
         if not original.exists():
             raise FileNotFoundError(f"Resume not found: {resume_path}")
 
-        original_content = original.read_text(encoding="utf-8")
+        # If it's a PDF or TXT, we can't tailor it with LaTeX logic
+        suffix = original.suffix.lower()
+        if suffix in [".pdf", ".txt"]:
+            print(f"[Tailor] Skipping LaTeX tailoring for {suffix} file: {resume_path}")
+            return {
+                "output_path": str(original),
+                "changes_made": [],
+                "note": f"Tailoring skipped for {suffix} file. Using original resume."
+            }
+
+        try:
+            original_content = original.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            # Fallback for binary files that might have slipped through
+            print(f"[Tailor] UnicodeDecodeError reading {resume_path}. Skipping tailoring.")
+            return {
+                "output_path": str(original),
+                "changes_made": [],
+                "note": "Could not read resume as text for tailoring. Using original."
+            }
 
         # Ask AI to generate tailored content
         tailored_content = await self._generate_tailored_content(

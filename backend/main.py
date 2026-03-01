@@ -246,12 +246,13 @@ async def analyze_resume(request: AnalyzeRequest):
 
     # Parse resume
     try:
-        if Path(resume_path).suffix == ".pdf":
+        suffix = Path(resume_path).suffix.lower()
+        if suffix == ".pdf":
             from backend.resume.pdf_parser import PDFResumeParser
             parser = PDFResumeParser()
             parser.parse(resume_path)
             resume_text = parser.get_text_content()
-        elif Path(resume_path).suffix == ".txt":
+        elif suffix == ".txt":
             resume_text = Path(resume_path).read_text(encoding="utf-8")
         else:
             parser = LaTeXResumeParser()
@@ -293,12 +294,13 @@ async def tailor_resume(request: TailorRequest):
         resume_path = str(settings.TEMPLATES_DIR / "resume_template.tex")
 
     # First analyze
-    if Path(resume_path).suffix == ".pdf":
+    suffix = Path(resume_path).suffix.lower()
+    if suffix == ".pdf":
         from backend.resume.pdf_parser import PDFResumeParser
         parser = PDFResumeParser()
         parser.parse(resume_path)
         resume_text = parser.get_text_content()
-    elif Path(resume_path).suffix == ".txt":
+    elif suffix == ".txt":
         resume_text = Path(resume_path).read_text(encoding="utf-8")
     else:
         parser = LaTeXResumeParser()
