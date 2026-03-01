@@ -69,11 +69,30 @@ class AutoApplyEngine:
         results = []
 
         try:
+            import traceback
             # Parse the base resume
-            parser = LaTeXResumeParser()
-            resume_data = parser.parse(resume_path)
-            resume_text = parser.get_text_content()
+            resume_ext = Path(resume_path).suffix.lower()
+            if resume_ext == ".pdf":
+                from backend.resume.pdf_parser import PDFResumeParser
+                parser = PDFResumeParser()
+                parser.parse(resume_path)
+                resume_text = parser.get_text_content()
+                resume_data = {"sections": {"content": resume_text}}
+            elif resume_ext == ".txt":
+                resume_text = Path(resume_path).read_text(encoding="utf-8")
+                resume_data = {"sections": {"content": resume_text}}
+            else:
+                parser = LaTeXResumeParser()
+                resume_data = parser.parse(resume_path)
+                resume_text = parser.get_text_content()
+        except Exception as e:
+            self.is_running = False
+            self.current_progress["status"] = f"Failed to read resume: {str(e)}"
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Resume parse error: {str(e)}"}
 
+        try:
             jobs_to_process = jobs[:max_applications]
 
             for i, job in enumerate(jobs_to_process):
@@ -96,6 +115,8 @@ class AutoApplyEngine:
 
         except Exception as e:
             self.current_progress["status"] = f"Error: {str(e)}"
+            import traceback
+            traceback.print_exc()
         finally:
             self.is_running = False
             self.current_progress["status"] = "completed"
