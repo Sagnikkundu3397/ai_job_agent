@@ -12,6 +12,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="/static/styles.css">
+    <!-- Tagify for better multi-select UI -->
+    <link href="https://cdn.jsdelivr.net/npm/@yaireo/tagify/dist/tagify.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@yaireo/tagify"></script>
 </head>
 
 <body>
@@ -110,49 +113,18 @@
                 <div class="search-form">
                     <div class="form-row">
                         <div class="form-group flex-2">
-                            <label for="jobTitle">Job Titles (comma separated)</label>
-                            <input type="text" id="jobTitle" list="jobSuggestions"
-                                placeholder="e.g., AI Engineer, NLP, Data Scientist" autocomplete="off">
-                            <datalist id="jobSuggestions">
-                                <!-- AI & ML Roles -->
-                                <option value="AI / ML Engineer">
-                                <option value="Artificial Intelligence Engineer">
-                                <option value="Machine Learning Engineer">
-                                <option value="Deep Learning Engineer">
-                                <option value="NLP Engineer">
-                                <option value="Computer Vision Engineer">
-                                <option value="AI Researcher">
-                                <option value="Generative AI Engineer">
-                                    <!-- Data Roles -->
-                                <option value="Data Scientist">
-                                <option value="Data Analyst">
-                                <option value="Data Engineer">
-                                    <!-- Software Engineering -->
-                                <option value="Software Engineer">
-                                <option value="Frontend Developer">
-                                <option value="Backend Developer">
-                                <option value="Full Stack Developer">
-                                    <!-- Other IT Roles -->
-                                <option value="DevOps Engineer">
-                                <option value="Cloud Architect">
-                                <option value="Cybersecurity Analyst">
-                                <option value="Product Manager">
-                                <option value="UX/UI Designer">
-                            </datalist>
+                            <label for="jobTitle">Job Titles</label>
+                            <input type="text" id="jobTitle" placeholder="e.g., AI Engineer, NLP, Data Scientist"
+                                autocomplete="off">
                         </div>
                         <div class="form-group flex-1">
                             <label for="jobType">Job Type</label>
-                            <select id="jobType" multiple size="4" style="height: auto;">
-                                <option value="Remote">Remote</option>
-                                <option value="Internship">Internship</option>
-                                <option value="Hybrid">Hybrid</option>
-                                <option value="Full Time">Full-Time</option>
-                            </select>
-                            <small style="color: var(--text-secondary); font-size: 11px;">Ctrl/Cmd+Click to select
+                            <input type="text" id="jobType" placeholder="Select type(s)">
+                            <small style="color: var(--text-secondary); font-size: 11px;">Search or select
                                 multiple</small>
                         </div>
                         <div class="form-group flex-1">
-                            <label for="location">Locations (comma separated)</label>
+                            <label for="location">Locations</label>
                             <input type="text" id="location" placeholder="e.g., Bangalore, Delhi, remote"
                                 autocomplete="off">
                         </div>

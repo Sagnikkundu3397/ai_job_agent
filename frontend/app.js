@@ -20,6 +20,11 @@ const state = {
     ],
     activePlatforms: new Set(),
     progressInterval: null,
+    tagify: {
+        jobTitle: null,
+        jobType: null,
+        location: null
+    }
 };
 
 // Initialize all platforms as active
@@ -154,23 +159,40 @@ const JOB_SUGGESTIONS = [
 ];
 
 function initAutocomplete() {
-    const input = document.getElementById('jobTitle');
-    const datalist = document.getElementById('jobSuggestions');
+    const titleInput = document.getElementById('jobTitle');
+    const typeInput = document.getElementById('jobType');
+    const locInput = document.getElementById('location');
 
-    input.addEventListener('input', function () {
-        const val = this.value.toLowerCase().trim();
-        datalist.innerHTML = '';
+    // Job Titles Tagify
+    state.tagify.jobTitle = new Tagify(titleInput, {
+        whitelist: JOB_SUGGESTIONS,
+        maxTags: 10,
+        dropdown: {
+            maxItems: 20,
+            enabled: 0,
+            closeOnSelect: false
+        }
+    });
 
-        if (!val) return;
+    // Job Types Tagify
+    state.tagify.jobType = new Tagify(typeInput, {
+        whitelist: ["Remote", "Internship", "Hybrid", "Full Time", "Contract", "Part Time"],
+        maxTags: 5,
+        enforceWhitelist: true,
+        dropdown: {
+            enabled: 0,
+            closeOnSelect: false
+        }
+    });
 
-        // Find matching job roles (case-insensitive substring match)
-        const matches = JOB_SUGGESTIONS.filter(job => job.toLowerCase().includes(val));
-
-        matches.forEach(match => {
-            const option = document.createElement('option');
-            option.value = match;
-            datalist.appendChild(option);
-        });
+    // Location Tagify
+    state.tagify.location = new Tagify(locInput, {
+        whitelist: ["Bangalore", "Delhi", "Mumbai", "Remote", "USA", "UK"],
+        maxTags: 5,
+        dropdown: {
+            enabled: 0,
+            closeOnSelect: false
+        }
     });
 }
 
@@ -180,16 +202,20 @@ function initAutocomplete() {
 // ========================
 
 async function searchJobs() {
-    const jobTitle = document.getElementById('jobTitle').value.trim();
-    if (!jobTitle) {
-        showToast('Please enter a job title', 'warning');
+    const jobTitles = state.tagify.jobTitle.value.map(t => t.value);
+    const jobTitleStr = jobTitles.join(', ');
+
+    if (jobTitles.length === 0) {
+        showToast('Please enter at least one job title', 'warning');
         return;
     }
 
-    const location = document.getElementById('location').value.trim();
-    const typeSelect = document.getElementById('jobType');
-    const jobTypes = Array.from(typeSelect.selectedOptions).map(opt => opt.value);
+    const locations = state.tagify.location.value.map(t => t.value);
+    const locationStr = locations.join(', ');
+
+    const jobTypes = state.tagify.jobType.value.map(t => t.value);
     const jobTypeStr = jobTypes.join(', ');
+
     const numResults = parseInt(document.getElementById('numResults').value);
     const dateFilter = document.getElementById('dateFilter').value;
 
@@ -202,8 +228,8 @@ async function searchJobs() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                job_title: jobTitle,
-                location: location,
+                job_title: jobTitleStr,
+                location: locationStr,
                 job_type: jobTypeStr,
                 num_results: numResults,
                 date_filter: dateFilter,
@@ -237,8 +263,9 @@ async function searchJobs() {
 }
 
 function clearSearch() {
-    document.getElementById('jobTitle').value = '';
-    document.getElementById('location').value = '';
+    state.tagify.jobTitle.removeAllTags();
+    state.tagify.jobType.removeAllTags();
+    state.tagify.location.removeAllTags();
     state.jobs = [];
     state.selectedJobs.clear();
     document.getElementById('jobGrid').innerHTML = `
