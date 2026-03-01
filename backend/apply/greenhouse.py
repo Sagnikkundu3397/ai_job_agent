@@ -41,12 +41,17 @@ async def apply_greenhouse(job: dict, resume_path: str, cover_letter: str = "") 
     if "/jobs/" in url and "#app" not in url:
         apply_url = url + "#app"
 
+    browser = None
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            # Optimize launch for low-memory environments like Render
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--disable-dev-shm-usage", "--no-sandbox", "--disable-gpu"]
+            )
             page = await browser.new_page()
 
-            await page.goto(apply_url, wait_until="networkidle", timeout=30000)
+            await page.goto(apply_url, wait_until="networkidle", timeout=45000)
             await asyncio.sleep(2)
 
             # Fill in application form fields
@@ -118,13 +123,11 @@ async def apply_greenhouse(job: dict, resume_path: str, cover_letter: str = "") 
 
             # Fill Cover Letter if provided
             if cover_letter:
-                # Greenhouse usually has a cover_letter textarea for pasting
                 cover_selectors = [
                     'textarea[name*="cover"]',
                     '#cover_letter',
                 ]
                 
-                # First try to see if there's a button to enter Cover Letter manually
                 try:
                     manual_btn = await page.query_selector('a[data-source="paste"]:has-text("Paste")')
                     if manual_btn:
@@ -174,15 +177,18 @@ async def apply_greenhouse(job: dict, resume_path: str, cover_letter: str = "") 
                         element = await page.query_selector(selector)
                         if element:
                             await element.click()
-                            await asyncio.sleep(3)  # Wait for submission
+                            await asyncio.sleep(5)  # Wait for submission
+                            # Wait for some success message or redirect
                             form_filled = True
                             break
                     except Exception:
                         continue
 
-            await browser.close()
             return form_filled
 
     except Exception as e:
         print(f"[Greenhouse] Auto-apply failed: {e}")
         return False
+    finally:
+        if browser:
+            await browser.close()

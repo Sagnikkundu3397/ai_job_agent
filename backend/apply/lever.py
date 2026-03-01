@@ -41,12 +41,17 @@ async def apply_lever(job: dict, resume_path: str, cover_letter: str = "") -> bo
     if "/apply" not in url:
         apply_url = url.rstrip("/") + "/apply"
 
+    browser = None
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            # Optimize launch for low-memory environments like Render
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--disable-dev-shm-usage", "--no-sandbox", "--disable-gpu"]
+            )
             page = await browser.new_page()
 
-            await page.goto(apply_url, wait_until="networkidle", timeout=30000)
+            await page.goto(apply_url, wait_until="networkidle", timeout=45000)
             await asyncio.sleep(2)
 
             form_filled = False
@@ -163,14 +168,16 @@ async def apply_lever(job: dict, resume_path: str, cover_letter: str = "") -> bo
                         element = await page.query_selector(selector)
                         if element:
                             await element.click()
-                            await asyncio.sleep(3)
+                            await asyncio.sleep(5)  # Wait for submission
                             break
                     except Exception:
                         continue
 
-            await browser.close()
             return form_filled
 
     except Exception as e:
         print(f"[Lever] Auto-apply failed: {e}")
         return False
+    finally:
+        if browser:
+            await browser.close()

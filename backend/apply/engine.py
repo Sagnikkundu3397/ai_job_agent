@@ -145,19 +145,35 @@ class AutoApplyEngine:
 
         try:
             # Step 1: Analyze resume against job description
+            desc = job.get("description", "")
+            if not desc or len(desc) < 100:
+                # Try to fetch full description if snippet is too short
+                from backend.search.job_parser import job_parser
+                desc = await job_parser.fetch_job_description(job.get("url", ""), job.get("ats_platform", "default"))
+                if desc:
+                    job["description"] = desc
+
             analysis = await resume_analyzer.analyze(
                 resume_text, job.get("description", "")
             )
             match_score = analysis.get("match_score", 0)
             result["match_score"] = match_score
 
+            if match_score == 0 and "Analysis failed" in str(analysis.get("overall_assessment", "")):
+                result["error"] = analysis.get("overall_assessment")
+                # If analysis failed but we have a Greenhouse/Lever link, we can still TRY to apply
+                # but it's better to report as failed for now to avoid bad applications.
+            
             # Update job record with match score
             if job_id:
-                await update_job(job_id, {
+                data_to_update = {
                     "match_score": match_score,
-                    "keywords_missing": json.dumps(analysis.get("missing_keywords", [])),
                     "status": "analyzed",
-                })
+                }
+                if analysis.get("missing_keywords"):
+                     data_to_update["keywords_missing"] = json.dumps(analysis.get("missing_keywords", []))
+                
+                await update_job(job_id, data_to_update)
 
             # Step 2: Tailor resume if match score needs improvement
             if match_score < 95:  # Always tailor unless perfect match
@@ -211,8 +227,13 @@ class AutoApplyEngine:
                 result["note"] = "Auto-apply prepared. Manual submission may be needed."
 
         except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"[Engine Error] Job {job_id}: {error_trace}")
             result["status"] = "failed"
             result["error"] = str(e)
+            if "match_score" not in result or result["match_score"] == 0:
+                result["match_score"] = 0
 
         return result
 

@@ -768,8 +768,9 @@ function updateProgressUI(progress) {
     if (progress.results) {
         log.innerHTML = progress.results.map(r => {
             const cls = r.status === 'applied' ? 'success' : r.status === 'failed' ? 'error' : '';
+            const errorMsg = r.error ? `<br><small style="color: #ff8080;">Error: ${escapeHtml(r.error)}</small>` : '';
             return `<div class="log-entry ${cls}">
-                [${r.status.toUpperCase()}] ${r.job_title} @ ${r.company} — Score: ${r.match_score}%
+                [${r.status.toUpperCase()}] ${escapeHtml(r.job_title)} @ ${escapeHtml(r.company)} — Score: ${r.match_score}%${errorMsg}
             </div>`;
         }).join('');
     }

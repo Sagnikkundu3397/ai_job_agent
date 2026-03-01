@@ -180,20 +180,31 @@ class SerpAPIClient:
 
     def _extract_company(self, title: str, snippet: str, platform: str) -> str:
         """Attempt to extract company name from title/snippet."""
-        # Many ATS URLs include format: "Job Title - Company | Platform"
-        for sep in [" - ", " | ", " — ", " at "]:
+        # Clean title first
+        clean_t = title
+        for p in [" | ", " — ", " - ", " · "]:
+            if p in clean_t:
+                clean_t = clean_t.split(p)[0]
+
+        # Common patterns: "Job Title @ Company", "Job Title at Company"
+        for sep in [" @ ", " at ", " at: "]:
+            if sep in clean_t:
+                parts = clean_t.split(sep)
+                if len(parts) >= 2:
+                    candidate = parts[1].strip()
+                    # Remove years or locations if stuck to the end
+                    candidate = re.sub(r'\b(19|20)\d{2}\b', '', candidate) # Remove years
+                    candidate = candidate.split(',')[0].strip() # Remove location if comma
+                    if candidate and candidate.lower() not in ["greenhouse", "lever", "jobs", "hiring"]:
+                        return candidate
+
+        # Fallback to checking the title for the first part after a dash
+        for sep in [" - ", " | ", " — "]:
             if sep in title:
                 parts = title.split(sep)
                 if len(parts) >= 2:
-                    # Usually company is the second part
                     candidate = parts[1].strip()
-                    # Filter out platform names
-                    if candidate.lower() not in [
-                        "greenhouse",
-                        "lever",
-                        "workday",
-                        "jobs",
-                    ]:
+                    if candidate.lower() not in [platform.lower(), "greenhouse", "lever", "jobs"]:
                         return candidate
 
         return "Unknown Company"
@@ -201,28 +212,24 @@ class SerpAPIClient:
     def _extract_location(self, snippet: str) -> str:
         """Try to extract location from the snippet text."""
         location_keywords = [
-            "remote",
-            "hybrid",
-            "on-site",
-            "onsite",
-            "bangalore",
-            "mumbai",
-            "delhi",
-            "hyderabad",
-            "pune",
-            "chennai",
-            "kolkata",
-            "india",
-            "new york",
-            "san francisco",
-            "london",
+            "remote", "hybrid", "on-site", "onsite", "bangalore", "mumbai", 
+            "delhi", "hyderabad", "pune", "chennai", "kolkata", "india",
+            "new york", "san francisco", "austin", "texas", "london", "usa"
         ]
         found = []
         snippet_lower = snippet.lower()
         for kw in location_keywords:
             if kw in snippet_lower:
                 found.append(kw.title())
-        return ", ".join(found) if found else ""
+        
+        # Look for "in [City]" or "[City], [State]"
+        location_match = re.search(r'\bin\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', snippet)
+        if location_match:
+            loc = location_match.group(1)
+            if loc.lower() not in ["the", "this", "our"]:
+                found.append(loc)
+
+        return ", ".join(list(set(found))) if found else ""
 
 
 # Singleton
