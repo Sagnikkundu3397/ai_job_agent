@@ -1,8 +1,5 @@
-"""
-AI Job Agent - Resume Analyzer
-Uses Google Gemini AI to analyze resume against job descriptions.
-"""
-
+import asyncio
+import random
 import json
 import google.generativeai as genai
 from backend.config import settings
@@ -14,7 +11,23 @@ class ResumeAnalyzer:
     def __init__(self):
         if settings.GEMINI_API_KEY:
             genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        self.model_name = "gemini-2.0-flash"
+        self.model = genai.GenerativeModel(self.model_name)
+
+    async def _generate_with_retry(self, prompt: str, max_retries: int = 3):
+        """Helper to call Gemini with exponential backoff."""
+        for attempt in range(max_retries):
+            try:
+                response = await self.model.generate_content_async(prompt)
+                return response
+            except Exception as e:
+                if "429" in str(e) and attempt < max_retries - 1:
+                    wait_time = (2 ** attempt) + random.uniform(0, 5)
+                    print(f"[Gemini Analyzer] Rate limit hit. Retrying in {wait_time:.1f}s... (Attempt {attempt+1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise e
+        return None
 
     async def analyze(self, resume_text: str, job_description: str) -> dict:
         """
@@ -81,7 +94,9 @@ Focus on actionable, concrete changes. Be honest about the match score.
 """
 
         try:
-            response = await self.model.generate_content_async(prompt)
+            response = await self._generate_with_retry(prompt)
+            if not response:
+                raise Exception("No response from Gemini after retries")
             text = response.text.strip()
 
             # Strip markdown code fences if present

@@ -1,9 +1,6 @@
-"""
-AI Job Agent - Cover Letter Generator
-Generates customized cover letters using Gemini.
-"""
-
 import os
+import asyncio
+import random
 from pathlib import Path
 import google.generativeai as genai
 from backend.config import settings
@@ -12,9 +9,25 @@ class CoverLetterGenerator:
     """Generates ATS-friendly cover letters tailored to a job description."""
 
     def __init__(self):
-        self.model_name = "gemini-1.5-flash"
+        self.model_name = "gemini-2.0-flash"
         if settings.GEMINI_API_KEY:
             genai.configure(api_key=settings.GEMINI_API_KEY)
+        self.model = genai.GenerativeModel(self.model_name)
+
+    async def _generate_with_retry(self, prompt: str, max_retries: int = 3):
+        """Helper to call Gemini with exponential backoff."""
+        for attempt in range(max_retries):
+            try:
+                response = await self.model.generate_content_async(prompt)
+                return response
+            except Exception as e:
+                if "429" in str(e) and attempt < max_retries - 1:
+                    wait_time = (2 ** attempt) + random.uniform(0, 5)
+                    print(f"[Gemini CoverLetter] Rate limit hit. Retrying in {wait_time:.1f}s... (Attempt {attempt+1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise e
+        return None
 
     async def generate(self, resume_text: str, job_description: str, job_title: str, company: str, applicant_name: str) -> str:
         """
@@ -41,8 +54,9 @@ Job Description:
 {job_description}
 """
         try:
-            model = genai.GenerativeModel(self.model_name)
-            response = model.generate_content(prompt)
+            response = await self._generate_with_retry(prompt)
+            if not response:
+                raise Exception("No response from Gemini after retries")
             return response.text.strip()
         except Exception as e:
             print(f"[CoverLetterGenerator] Error: {e}")
