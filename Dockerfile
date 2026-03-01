@@ -1,19 +1,4 @@
-FROM python:3.10-slim
-
-# Install system dependencies required for Playwright
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    libgconf-2-4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libgdk-pixbuf2.0-0 \
-    libgtk-3-0 \
-    libgbm-dev \
-    libnss3-dev \
-    libxss-dev \
-    libasound2 \
-    && rm -rf /var/lib/apt/lists/*
+FROM python:3.10-slim-bookworm
 
 # Set working directory
 WORKDIR /app
