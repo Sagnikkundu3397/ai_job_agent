@@ -101,7 +101,11 @@ class SerpAPIClient:
                         "m30": "qdr:n30", # past 30 minutes
                         "h1": "qdr:h",    # past hour
                         "h2": "qdr:h2",   # past 2 hours
+                        "h3": "qdr:h3",   # past 3 hours
+                        "h6": "qdr:h6",   # past 6 hours
+                        "h12": "qdr:h12", # past 12 hours
                         "d": "qdr:d",     # past 24 hours
+                        "d2": "qdr:d2",   # past 2 days
                         "d3": "qdr:d3",   # past 3 days
                         "w": "qdr:w",     # past week
                         "m": "qdr:m",     # past month
