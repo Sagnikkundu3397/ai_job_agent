@@ -110,9 +110,9 @@
                 <div class="search-form">
                     <div class="form-row">
                         <div class="form-group flex-2">
-                            <label for="jobTitle">Job Title / Keywords</label>
+                            <label for="jobTitle">Job Titles (comma separated)</label>
                             <input type="text" id="jobTitle" list="jobSuggestions"
-                                placeholder="e.g., AI Engineer, Data Scientist" autocomplete="off">
+                                placeholder="e.g., AI Engineer, NLP, Data Scientist" autocomplete="off">
                             <datalist id="jobSuggestions">
                                 <!-- AI & ML Roles -->
                                 <option value="AI / ML Engineer">
@@ -142,17 +142,19 @@
                         </div>
                         <div class="form-group flex-1">
                             <label for="jobType">Job Type</label>
-                            <select id="jobType">
-                                <option value="" selected>Any Type</option>
+                            <select id="jobType" multiple size="4" style="height: auto;">
                                 <option value="Remote">Remote</option>
                                 <option value="Internship">Internship</option>
                                 <option value="Hybrid">Hybrid</option>
                                 <option value="Full Time">Full-Time</option>
                             </select>
+                            <small style="color: var(--text-secondary); font-size: 11px;">Ctrl/Cmd+Click to select
+                                multiple</small>
                         </div>
                         <div class="form-group flex-1">
-                            <label for="location">Location</label>
-                            <input type="text" id="location" placeholder="e.g., Bangalore, remote" autocomplete="off">
+                            <label for="location">Locations (comma separated)</label>
+                            <input type="text" id="location" placeholder="e.g., Bangalore, Delhi, remote"
+                                autocomplete="off">
                         </div>
                     </div>
                     <div class="form-row">
@@ -168,10 +170,14 @@
                         <div class="form-group">
                             <label for="dateFilter">Date Posted</label>
                             <select id="dateFilter">
+                                <option value="m30" selected>Past 30 Mins</option>
+                                <option value="h1">Past 1 Hour</option>
+                                <option value="h2">Past 2 Hours</option>
+                                <option value="d">Past 24 Hours</option>
+                                <option value="d3">Past 3 Days</option>
+                                <option value="w">Past Week</option>
+                                <option value="m">Past Month</option>
                                 <option value="">Any time</option>
-                                <option value="d">Past 24 hours</option>
-                                <option value="w">Past week</option>
-                                <option value="m">Past month</option>
                             </select>
                         </div>
                         <div class="form-group flex-2">
@@ -241,8 +247,8 @@
                         </svg>
                     </div>
                     <h3>Drop your resume here</h3>
-                    <p>Supports .tex files (Jake's Resume template)</p>
-                    <input type="file" id="resumeFile" accept=".tex,.txt" style="display:none;">
+                    <p>Supports .pdf, .tex, and .txt files</p>
+                    <input type="file" id="resumeFile" accept=".pdf,.tex,.txt" style="display:none;">
                     <button class="btn btn-primary" onclick="document.getElementById('resumeFile').click()">Choose
                         File</button>
                 </div>

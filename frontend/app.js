@@ -187,7 +187,9 @@ async function searchJobs() {
     }
 
     const location = document.getElementById('location').value.trim();
-    const jobType = document.getElementById('jobType').value;
+    const typeSelect = document.getElementById('jobType');
+    const jobTypes = Array.from(typeSelect.selectedOptions).map(opt => opt.value);
+    const jobTypeStr = jobTypes.join(', ');
     const numResults = parseInt(document.getElementById('numResults').value);
     const dateFilter = document.getElementById('dateFilter').value;
 
@@ -202,7 +204,7 @@ async function searchJobs() {
             body: JSON.stringify({
                 job_title: jobTitle,
                 location: location,
-                job_type: jobType,
+                job_type: jobTypeStr,
                 num_results: numResults,
                 date_filter: dateFilter,
                 platforms: Array.from(state.activePlatforms),
@@ -401,8 +403,8 @@ function initResumeUpload() {
 }
 
 async function uploadResume(file) {
-    if (!file.name.endsWith('.tex') && !file.name.endsWith('.txt')) {
-        showToast('Please upload a .tex file (Jake\'s Resume template)', 'warning');
+    if (!file.name.endsWith('.tex') && !file.name.endsWith('.txt') && !file.name.endsWith('.pdf')) {
+        showToast('Please upload a .tex, .txt, or .pdf file', 'warning');
         return;
     }
 

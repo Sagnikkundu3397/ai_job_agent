@@ -96,9 +96,17 @@ class SerpAPIClient:
                     "start": start,
                 }
 
-                # Add date filter
                 if date_filter:
-                    tbs_map = {"d": "qdr:d", "w": "qdr:w", "m": "qdr:m", "y": "qdr:y"}
+                    tbs_map = {
+                        "m30": "qdr:n30", # past 30 minutes
+                        "h1": "qdr:h",    # past hour
+                        "h2": "qdr:h2",   # past 2 hours
+                        "d": "qdr:d",     # past 24 hours
+                        "d3": "qdr:d3",   # past 3 days
+                        "w": "qdr:w",     # past week
+                        "m": "qdr:m",     # past month
+                        "y": "qdr:y",     # past year
+                    }
                     if date_filter in tbs_map:
                         params["tbs"] = tbs_map[date_filter]
 

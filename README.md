@@ -43,7 +43,7 @@ pip install -r requirements.txt
 # Install Playwright browsers (for auto-apply)
 python -m playwright install chromium
 
-# Configure API keys
+# Configure API keysc
 copy .env.example .env
 # Edit .env and add your API keys
 ```

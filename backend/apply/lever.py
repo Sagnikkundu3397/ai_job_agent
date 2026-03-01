@@ -8,7 +8,7 @@ from pathlib import Path
 from backend.config import settings
 
 
-async def apply_lever(job: dict, resume_path: str) -> bool:
+async def apply_lever(job: dict, resume_path: str, cover_letter: str = "") -> bool:
     """
     Auto-apply to a Lever job listing.
 
@@ -21,6 +21,7 @@ async def apply_lever(job: dict, resume_path: str) -> bool:
     Args:
         job: Job dict with 'url' key
         resume_path: Path to the resume file to upload
+        cover_letter: text of cover letter
 
     Returns:
         True if successfully applied
@@ -113,6 +114,23 @@ async def apply_lever(job: dict, resume_path: str) -> bool:
                         break
                 except Exception:
                     continue
+
+            # Fill Cover Letter if provided
+            if cover_letter:
+                cover_selectors = [
+                    'textarea[name*="comments"]',
+                    'textarea[placeholder*="Additional information"]',
+                    '.application-additional input',
+                ]
+                for selector in cover_selectors:
+                    try:
+                        element = await page.query_selector(selector)
+                        if element and await element.is_visible():
+                            await element.fill(cover_letter)
+                            form_filled = True
+                            break
+                    except Exception:
+                        continue
 
             # Resume upload
             resume_file = Path(resume_path)

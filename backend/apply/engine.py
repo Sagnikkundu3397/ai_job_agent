@@ -18,6 +18,7 @@ from backend.database import (
 from backend.resume.analyzer import resume_analyzer
 from backend.resume.tailor import resume_tailor
 from backend.resume.latex_parser import LaTeXResumeParser
+from backend.resume.cover_letter import cover_letter_generator
 
 
 class AutoApplyEngine:
@@ -150,6 +151,17 @@ class AutoApplyEngine:
                     result["tailored_resume"] = tailor_result["output_path"]
                     result["changes_made"] = tailor_result.get("changes_made", [])
 
+            # Step 2.5: Generate Cover Letter
+            applicant_name = await get_setting("applicant_name") or "Applicant"
+            cover_letter_text = await cover_letter_generator.generate(
+                resume_text,
+                job.get("description", ""),
+                job.get("title", ""),
+                job.get("company", ""),
+                applicant_name,
+            )
+            result["cover_letter"] = cover_letter_text
+
             # Step 3: Record the application (auto-apply via browser is complex)
             app_data = {
                 "job_id": job_id,
@@ -162,7 +174,7 @@ class AutoApplyEngine:
 
             # Step 4: Attempt auto-apply via browser
             apply_success = await self._attempt_apply(
-                job, result.get("tailored_resume") or resume_path
+                job, result.get("tailored_resume") or resume_path, result.get("cover_letter", "")
             )
 
             if apply_success:
@@ -183,7 +195,7 @@ class AutoApplyEngine:
 
         return result
 
-    async def _attempt_apply(self, job: dict, resume_path: str) -> bool:
+    async def _attempt_apply(self, job: dict, resume_path: str, cover_letter: str = "") -> bool:
         """
         Attempt to auto-apply to a job using browser automation.
         Currently supports Greenhouse and Lever.
@@ -195,10 +207,10 @@ class AutoApplyEngine:
         try:
             if platform == "greenhouse":
                 from backend.apply.greenhouse import apply_greenhouse
-                return await apply_greenhouse(job, resume_path)
+                return await apply_greenhouse(job, resume_path, cover_letter)
             elif platform == "lever":
                 from backend.apply.lever import apply_lever
-                return await apply_lever(job, resume_path)
+                return await apply_lever(job, resume_path, cover_letter)
             else:
                 # For unsupported platforms, mark as ready for manual apply
                 return False

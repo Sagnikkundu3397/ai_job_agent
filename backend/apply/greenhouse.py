@@ -8,7 +8,7 @@ from pathlib import Path
 from backend.config import settings
 
 
-async def apply_greenhouse(job: dict, resume_path: str) -> bool:
+async def apply_greenhouse(job: dict, resume_path: str, cover_letter: str = "") -> bool:
     """
     Auto-apply to a Greenhouse job listing.
 
@@ -21,6 +21,7 @@ async def apply_greenhouse(job: dict, resume_path: str) -> bool:
     Args:
         job: Job dict with 'url' key
         resume_path: Path to the resume file to upload
+        cover_letter: text of cover letter
 
     Returns:
         True if successfully applied
@@ -114,6 +115,33 @@ async def apply_greenhouse(job: dict, resume_path: str) -> bool:
                         break
                 except Exception:
                     continue
+
+            # Fill Cover Letter if provided
+            if cover_letter:
+                # Greenhouse usually has a cover_letter textarea for pasting
+                cover_selectors = [
+                    'textarea[name*="cover"]',
+                    '#cover_letter',
+                ]
+                
+                # First try to see if there's a button to enter Cover Letter manually
+                try:
+                    manual_btn = await page.query_selector('a[data-source="paste"]:has-text("Paste")')
+                    if manual_btn:
+                        await manual_btn.click()
+                        await asyncio.sleep(0.5)
+                except Exception:
+                    pass
+
+                for selector in cover_selectors:
+                    try:
+                        element = await page.query_selector(selector)
+                        if element and await element.is_visible():
+                            await element.fill(cover_letter)
+                            form_filled = True
+                            break
+                    except Exception:
+                        continue
 
             # Upload resume
             resume_file = Path(resume_path)

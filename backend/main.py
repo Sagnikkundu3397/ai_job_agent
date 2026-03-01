@@ -187,12 +187,12 @@ async def get_job_detail(job_id: int):
 
 @app.post("/api/resume/upload")
 async def upload_resume(file: UploadFile = File(...)):
-    """Upload a resume .tex file."""
-    if not file.filename.endswith((".tex", ".txt")):
-        raise HTTPException(status_code=400, detail="Only .tex and .txt files are supported")
+    """Upload a resume file (.tex, .txt, .pdf)."""
+    if not file.filename.lower().endswith((".tex", ".txt", ".pdf")):
+        raise HTTPException(status_code=400, detail="Only .tex, .txt, and .pdf files are supported")
 
     # Save the file
-    upload_path = settings.RESUMES_DIR / f"base_resume{Path(file.filename).suffix}"
+    upload_path = settings.RESUMES_DIR / f"base_resume{Path(file.filename).suffix.lower()}"
     content = await file.read()
     upload_path.write_bytes(content)
 
@@ -201,9 +201,19 @@ async def upload_resume(file: UploadFile = File(...)):
 
     # Parse and validate
     try:
-        parser = LaTeXResumeParser()
-        data = parser.parse(str(upload_path))
-        text = parser.get_text_content()
+        if upload_path.suffix == ".pdf":
+            from backend.resume.pdf_parser import PDFResumeParser
+            parser = PDFResumeParser()
+            data = parser.parse(str(upload_path))
+            text = parser.get_text_content()
+        elif upload_path.suffix == ".txt":
+            text = upload_path.read_text(encoding="utf-8")
+            data = {"sections": {"content": text}}
+        else:
+            parser = LaTeXResumeParser()
+            data = parser.parse(str(upload_path))
+            text = parser.get_text_content()
+            
         return {
             "message": "Resume uploaded successfully",
             "path": str(upload_path),
@@ -235,10 +245,18 @@ async def analyze_resume(request: AnalyzeRequest):
         resume_path = str(settings.TEMPLATES_DIR / "resume_template.tex")
 
     # Parse resume
-    parser = LaTeXResumeParser()
     try:
-        parser.parse(resume_path)
-        resume_text = parser.get_text_content()
+        if Path(resume_path).suffix == ".pdf":
+            from backend.resume.pdf_parser import PDFResumeParser
+            parser = PDFResumeParser()
+            parser.parse(resume_path)
+            resume_text = parser.get_text_content()
+        elif Path(resume_path).suffix == ".txt":
+            resume_text = Path(resume_path).read_text(encoding="utf-8")
+        else:
+            parser = LaTeXResumeParser()
+            parser.parse(resume_path)
+            resume_text = parser.get_text_content()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse resume: {e}")
 
@@ -275,9 +293,18 @@ async def tailor_resume(request: TailorRequest):
         resume_path = str(settings.TEMPLATES_DIR / "resume_template.tex")
 
     # First analyze
-    parser = LaTeXResumeParser()
-    parser.parse(resume_path)
-    resume_text = parser.get_text_content()
+    if Path(resume_path).suffix == ".pdf":
+        from backend.resume.pdf_parser import PDFResumeParser
+        parser = PDFResumeParser()
+        parser.parse(resume_path)
+        resume_text = parser.get_text_content()
+    elif Path(resume_path).suffix == ".txt":
+        resume_text = Path(resume_path).read_text(encoding="utf-8")
+    else:
+        parser = LaTeXResumeParser()
+        parser.parse(resume_path)
+        resume_text = parser.get_text_content()
+        
     analysis = await resume_analyzer.analyze(resume_text, job["description"])
 
     # Then tailor
