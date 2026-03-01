@@ -5,6 +5,7 @@ Searches for jobs across ATS platforms using Google search with site: operators.
 
 import asyncio
 import httpx
+import re
 from typing import Optional
 from backend.config import settings
 
@@ -34,21 +35,37 @@ class SerpAPIClient:
     ) -> str:
         """
         Build a full Google search query.
-        Example: (site:greenhouse.io OR site:lever.co) "software engineer" ("Bangalore" OR "remote")
+        Example: (site:greenhouse.io OR site:lever.co) ("software engineer" OR "data scientist") ("Bangalore" OR "remote")
         """
         site_query = self._build_site_query(platforms)
-        query = f'{site_query} "{job_title}"'
+        
+        # Handle multiple job titles
+        titles = [t.strip() for t in job_title.split(",") if t.strip()]
+        if len(titles) > 1:
+            title_query = " OR ".join(f'"{t}"' for t in titles)
+            query = f'{site_query} ({title_query})'
+        elif titles:
+            query = f'{site_query} "{titles[0]}"'
+        else:
+            query = f'{site_query}'
 
+        # Handle multiple locations
         if location:
-            locations = [loc.strip() for loc in location.split(",")]
+            locations = [loc.strip() for loc in location.split(",") if loc.strip()]
             if len(locations) > 1:
                 loc_query = " OR ".join(f'"{loc}"' for loc in locations)
                 query += f" ({loc_query})"
-            else:
+            elif locations:
                 query += f' "{locations[0]}"'
 
+        # Handle multiple job types
         if job_type:
-            query += f' "{job_type}"'
+            types = [t.strip() for t in job_type.split(",") if t.strip()]
+            if len(types) > 1:
+                type_query = " OR ".join(f'"{t}"' for t in types)
+                query += f" ({type_query})"
+            elif types:
+                query += f' "{types[0]}"'
 
         if exclude_terms:
             for term in exclude_terms:
@@ -73,7 +90,7 @@ class SerpAPIClient:
             job_title: Job title to search for (e.g., "software engineer intern")
             location: Location filter (e.g., "Bangalore, remote")
             num_results: Maximum number of results to fetch
-            date_filter: Time filter - 'd' (day), 'w' (week), 'm' (month), 'y' (year)
+            date_filter: Time filter - 'd', 'w', etc.
             platforms: Optional list of specific ATS domains to search
             exclude_terms: Terms to exclude from search results
 
@@ -98,18 +115,18 @@ class SerpAPIClient:
 
                 if date_filter:
                     tbs_map = {
-                        "m30": "qdr:n30", # past 30 minutes
-                        "h1": "qdr:h",    # past hour
-                        "h2": "qdr:h2",   # past 2 hours
-                        "h3": "qdr:h3",   # past 3 hours
-                        "h6": "qdr:h6",   # past 6 hours
-                        "h12": "qdr:h12", # past 12 hours
-                        "d": "qdr:d",     # past 24 hours
-                        "d2": "qdr:d2",   # past 2 days
-                        "d3": "qdr:d3",   # past 3 days
-                        "w": "qdr:w",     # past week
-                        "m": "qdr:m",     # past month
-                        "y": "qdr:y",     # past year
+                        "m30": "qdr:n30",
+                        "h1": "qdr:h",
+                        "h2": "qdr:h2",
+                        "h3": "qdr:h3",
+                        "h6": "qdr:h6",
+                        "h12": "qdr:h12",
+                        "d": "qdr:d",
+                        "d2": "qdr:d2",
+                        "d3": "qdr:d3",
+                        "w": "qdr:w",
+                        "m": "qdr:m",
+                        "y": "qdr:y",
                     }
                     if date_filter in tbs_map:
                         params["tbs"] = tbs_map[date_filter]
@@ -132,8 +149,6 @@ class SerpAPIClient:
                             all_results.append(job)
 
                     start += per_page
-
-                    # Rate limiting
                     await asyncio.sleep(settings.SEARCH_DELAY_SECONDS)
 
                 except Exception as e:
@@ -148,17 +163,14 @@ class SerpAPIClient:
         if not link:
             return None
 
-        # Detect which ATS platform
         platform = "unknown"
         for domain in self.ats_platforms:
             if domain in link:
-                platform = domain.split(".")[0]  # e.g., "greenhouse" from "greenhouse.io"
+                platform = domain.split(".")[0]
                 break
 
         title = result.get("title", "")
         snippet = result.get("snippet", "")
-
-        # Try to extract company from title or snippet
         company = self._extract_company(title, snippet, platform)
 
         return {
@@ -172,7 +184,6 @@ class SerpAPIClient:
 
     def _clean_title(self, title: str) -> str:
         """Clean the job title from search result."""
-        # Remove common suffixes like "- Company Name" or "| Greenhouse"
         for sep in [" - ", " | ", " — ", " · "]:
             if sep in title:
                 title = title.split(sep)[0]
@@ -180,25 +191,21 @@ class SerpAPIClient:
 
     def _extract_company(self, title: str, snippet: str, platform: str) -> str:
         """Attempt to extract company name from title/snippet."""
-        # Clean title first
         clean_t = title
         for p in [" | ", " — ", " - ", " · "]:
             if p in clean_t:
                 clean_t = clean_t.split(p)[0]
 
-        # Common patterns: "Job Title @ Company", "Job Title at Company"
         for sep in [" @ ", " at ", " at: "]:
             if sep in clean_t:
                 parts = clean_t.split(sep)
                 if len(parts) >= 2:
                     candidate = parts[1].strip()
-                    # Remove years or locations if stuck to the end
-                    candidate = re.sub(r'\b(19|20)\d{2}\b', '', candidate) # Remove years
-                    candidate = candidate.split(',')[0].strip() # Remove location if comma
+                    candidate = re.sub(r'\b(19|20)\d{2}\b', '', candidate)
+                    candidate = candidate.split(',')[0].strip()
                     if candidate and candidate.lower() not in ["greenhouse", "lever", "jobs", "hiring"]:
                         return candidate
 
-        # Fallback to checking the title for the first part after a dash
         for sep in [" - ", " | ", " — "]:
             if sep in title:
                 parts = title.split(sep)
@@ -222,7 +229,6 @@ class SerpAPIClient:
             if kw in snippet_lower:
                 found.append(kw.title())
         
-        # Look for "in [City]" or "[City], [State]"
         location_match = re.search(r'\bin\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', snippet)
         if location_match:
             loc = location_match.group(1)
