@@ -59,7 +59,7 @@ class Settings:
     # Defaults
     DEFAULT_MAX_APPLICATIONS: int = 5
     SEARCH_DELAY_SECONDS: float = 2.0
-    APPLY_DELAY_SECONDS: float = 10.0
+    APPLY_DELAY_SECONDS: float = 30.0
 
     @classmethod
     def ensure_dirs(cls):

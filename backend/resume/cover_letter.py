@@ -22,8 +22,8 @@ class CoverLetterGenerator:
                 return response
             except Exception as e:
                 if "429" in str(e) and attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) + random.uniform(0, 5)
-                    print(f"[Gemini CoverLetter] Rate limit hit. Retrying in {wait_time:.1f}s... (Attempt {attempt+1}/{max_retries})")
+                    wait_time = 30 + random.uniform(0, 5)
+                    print(f"[Gemini CoverLetter] Quota hit. Waiting {wait_time:.1f}s to reset RPM... (Attempt {attempt+1}/{max_retries})")
                     await asyncio.sleep(wait_time)
                 else:
                     raise e
