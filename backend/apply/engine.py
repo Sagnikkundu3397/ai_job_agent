@@ -144,62 +144,75 @@ class AutoApplyEngine:
         }
 
         try:
-            # Step 1: Analyze resume against job description
+            # Step 1: Analyze, Tailor, and Generate Cover Letter in ONE call
+            from backend.resume.unified_processor import unified_processor
+            
+            applicant_name = await get_setting("applicant_name") or "Applicant"
+            
+            # Ensure we have a job description
             desc = job.get("description", "")
             if not desc or len(desc) < 100:
-                # Try to fetch full description if snippet is too short
                 from backend.search.job_parser import job_parser
                 desc = await job_parser.fetch_job_description(job.get("url", ""), job.get("ats_platform", "default"))
                 if desc:
                     job["description"] = desc
 
-            analysis = await resume_analyzer.analyze(
-                resume_text, job.get("description", "")
+            # Unified Processing
+            print(f"[Engine] Starting unified AI processing for {job.get('title')} at {job.get('company')}...")
+            ai_data = await unified_processor.process_job(
+                resume_text,
+                resume_path,
+                job.get("description", ""),
+                job.get("title", ""),
+                job.get("company", ""),
+                applicant_name
             )
-            match_score = analysis.get("match_score", 0)
+
+            if ai_data.get("error"):
+                result["status"] = "failed"
+                result["error"] = f"AI processing failed: {ai_data['error']}"
+                return result
+
+            # Map unified results back to result dict
+            match_score = ai_data.get("match_score", 0)
             result["match_score"] = match_score
-
-            if match_score == 0 and "Analysis failed" in str(analysis.get("overall_assessment", "")):
-                result["error"] = analysis.get("overall_assessment")
-                # If analysis failed but we have a Greenhouse/Lever link, we can still TRY to apply
-                # but it's better to report as failed for now to avoid bad applications.
+            result["cover_letter"] = ai_data.get("cover_letter", "")
             
-            # Update job record with match score
-            if job_id:
-                data_to_update = {
-                    "match_score": match_score,
-                    "status": "analyzed",
-                }
-                if analysis.get("missing_keywords"):
-                     data_to_update["keywords_missing"] = json.dumps(analysis.get("missing_keywords", []))
-                
-                await update_job(job_id, data_to_update)
-
-            # Step 2: Tailor resume if match score needs improvement
-            if match_score < 95:  # Always tailor unless perfect match
+            # Step 2: Handle LaTeX Tailoring (if applicable and requested)
+            suffix = Path(resume_path).suffix.lower()
+            if suffix == ".tex" and match_score < 95:
+                # We still use the existing tailor logic to actually edit the LaTeX file
+                # but we pass the already generated analysis to save a call
                 tailor_result = await resume_tailor.tailor(
                     resume_path,
                     job.get("description", ""),
-                    analysis,
+                    ai_data, # Use unified AI data as analysis
                     job.get("title", ""),
                     job.get("company", ""),
                 )
                 if tailor_result.get("output_path"):
                     result["tailored_resume"] = tailor_result["output_path"]
                     result["changes_made"] = tailor_result.get("changes_made", [])
+            else:
+                # For non-LaTeX or good match, use original resume
+                result["tailored_resume"] = resume_path
+                result["changes_made"] = []
 
-            # Step 2.5: Generate Cover Letter
-            applicant_name = await get_setting("applicant_name") or "Applicant"
-            cover_letter_text = await cover_letter_generator.generate(
-                resume_text,
-                job.get("description", ""),
-                job.get("title", ""),
-                job.get("company", ""),
-                applicant_name,
-            )
-            result["cover_letter"] = cover_letter_text
+            # Update job record in database
+            if job_id:
+                await update_job(job_id, {
+                    "match_score": match_score,
+                    "status": "analyzed",
+                    "keywords_missing": json.dumps(ai_data.get("missing_keywords", []))
+                })
 
-            # Step 3: Record the application (auto-apply via browser is complex)
+            # Step 3: Check match score threshold
+            if match_score < 40:
+                result["status"] = "failed"
+                result["error"] = f"Match score too low ({match_score}%)"
+                return result
+
+            # Step 4: Record the application (auto-apply via browser is complex)
             app_data = {
                 "job_id": job_id,
                 "resume_path": resume_path,

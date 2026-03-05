@@ -136,7 +136,7 @@ class ResumeTailor:
     ) -> str:
         """Use Gemini to generate tailored resume content."""
         missing_keywords = analysis.get("missing_keywords", [])
-        priority_changes = analysis.get("priority_changes", [])
+        priority_changes = analysis.get("priority_changes", []) or analysis.get("tailoring_suggestions", [])
 
         prompt = f"""You are an expert LaTeX resume writer. Your task is to modify the resume content to better match the job description while STRICTLY PRESERVING the LaTeX template structure.
 
