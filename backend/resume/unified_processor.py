@@ -22,15 +22,26 @@ class UnifiedAIProcessor:
         self.model = genai.GenerativeModel(self.model_name)
 
     async def _generate_with_retry(self, prompt: str, max_retries: int = 3):
-        """Helper to call Gemini with exponential backoff and quota wait."""
+        """Helper to call Gemini with dynamic retry delay and daily limit check."""
         for attempt in range(max_retries):
             try:
                 response = await self.model.generate_content_async(prompt)
                 return response
             except Exception as e:
+                error_msg = str(e)
                 # Handle quota limits (429)
-                if "429" in str(e) and attempt < max_retries - 1:
-                    wait_time = 30 + random.uniform(0, 5)
+                if "429" in error_msg and attempt < max_retries - 1:
+                    # Try to extract the suggested wait time from the error message
+                    wait_time = 30 # Default
+                    match = re.search(r"retry in (\d+\.?\d*)s", error_msg)
+                    if match:
+                        wait_time = float(match.group(1)) + 2 # Add buffer
+                    
+                    # Detect if it's the daily limit
+                    if "GenerateRequestsPerDay" in error_msg:
+                        print(f"[Unified Processor] CRITICAL: Daily Quota EXCEEDED on this API Key.")
+                        raise Exception("DAILY_LIMIT_EXCEEDED: You have hit the Google Daily Limit (1,500 requests). Please wait 24h or use a NEW API Key.")
+                    
                     print(f"[Unified Processor] Quota hit. Waiting {wait_time:.1f}s... (Attempt {attempt+1}/{max_retries})")
                     await asyncio.sleep(wait_time)
                 else:
