@@ -35,7 +35,6 @@ from backend.search.serpapi_client import serpapi_client
 from backend.search.job_parser import job_parser
 from backend.resume.latex_parser import LaTeXResumeParser
 from backend.resume.analyzer import resume_analyzer
-from backend.resume.tailor import resume_tailor
 from backend.apply.engine import auto_apply_engine
 
 # ========================
@@ -142,9 +141,12 @@ async def search_jobs(request: SearchRequest):
         exclude_terms=request.exclude_terms,
     )
 
-    # Optionally enrich with full job descriptions
+    # Google Jobs API already provides full descriptions — enrichment not needed.
+    # But we still attempt to enrich any jobs that have very short descriptions.
     if request.enrich and results:
-        results = await job_parser.enrich_jobs(results[:10])  # Limit enrichment to first 10
+        short_desc_jobs = [j for j in results if len(j.get("description", "")) < 200]
+        if short_desc_jobs:
+            await job_parser.enrich_jobs(short_desc_jobs)
 
     # Save to database
     saved_jobs = []

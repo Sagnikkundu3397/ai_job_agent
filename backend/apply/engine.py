@@ -1,6 +1,7 @@
 """
 AI Job Agent - Auto-Apply Engine
 Orchestrates the automated job application process.
+One Gemini call per job via unified_processor (no duplicate calls).
 """
 
 import asyncio
@@ -15,16 +16,15 @@ from backend.database import (
     get_setting,
     set_setting,
 )
-from backend.resume.analyzer import resume_analyzer
-from backend.resume.tailor import resume_tailor
 from backend.resume.latex_parser import LaTeXResumeParser
-from backend.resume.cover_letter import cover_letter_generator
+from backend.resume.unified_processor import unified_processor
 
 
 class AutoApplyEngine:
     """
     Orchestrates the full auto-apply pipeline:
-    Search → Analyze → Tailor → Apply → Log
+    Search → Analyze → Tailor (LaTeX) → Cover Letter → Apply → Log
+    All AI work done in exactly ONE Gemini call per job.
     """
 
     def __init__(self):
@@ -47,9 +47,9 @@ class AutoApplyEngine:
         Run the auto-apply pipeline on a list of jobs.
 
         Args:
-            jobs: List of job dicts with 'id', 'title', 'company', 'description', 'url', 'ats_platform'
-            resume_path: Path to the base resume .tex file
-            max_applications: Maximum number of applications to submit
+            jobs: List of job dicts with 'id', 'title', 'company', 'description', 'url'
+            resume_path: Path to the base resume file (.tex, .pdf, or .txt)
+            max_applications: Cap on how many to process
 
         Returns:
             Summary dict with results
@@ -58,8 +58,9 @@ class AutoApplyEngine:
             return {"error": "Auto-apply is already running"}
 
         self.is_running = True
+        jobs_to_process = jobs[:max_applications]
         self.current_progress = {
-            "total": min(len(jobs), max_applications),
+            "total": len(jobs_to_process),
             "completed": 0,
             "current_job": "",
             "status": "running",
@@ -68,70 +69,74 @@ class AutoApplyEngine:
 
         results = []
 
+        # ── Parse base resume once ──────────────────────────────────────────
         try:
-            import traceback
-            # Parse the base resume
             resume_ext = Path(resume_path).suffix.lower()
             if resume_ext == ".pdf":
                 from backend.resume.pdf_parser import PDFResumeParser
                 parser = PDFResumeParser()
                 parser.parse(resume_path)
                 resume_text = parser.get_text_content()
-                resume_data = {"sections": {"content": resume_text}}
             elif resume_ext == ".txt":
                 resume_text = Path(resume_path).read_text(encoding="utf-8")
-                resume_data = {"sections": {"content": resume_text}}
             else:
+                # .tex (default / preferred)
                 parser = LaTeXResumeParser()
-                resume_data = parser.parse(resume_path)
+                parser.parse(resume_path)
                 resume_text = parser.get_text_content()
         except Exception as e:
             self.is_running = False
-            self.current_progress["status"] = f"Failed to read resume: {str(e)}"
-            import traceback
-            traceback.print_exc()
-            return {"error": f"Resume parse error: {str(e)}"}
+            self.current_progress["status"] = f"❌ Failed to read resume: {e}"
+            import traceback; traceback.print_exc()
+            return {"error": f"Resume parse error: {e}"}
 
+        # ── Process each job ────────────────────────────────────────────────
         try:
-            jobs_to_process = jobs[:max_applications]
-
             for i, job in enumerate(jobs_to_process):
                 if not self.is_running:
                     break
 
-                self.current_progress["current_job"] = f"{job.get('title', '')} at {job.get('company', '')}"
-                self.current_progress["status"] = f"Processing {i+1}/{len(jobs_to_process)}"
+                job_label = f"{job.get('title', '?')} @ {job.get('company', '?')}"
+                self.current_progress["current_job"] = job_label
+                self.current_progress["status"] = f"Processing {i+1}/{len(jobs_to_process)}: {job_label}"
 
-                result = await self._process_single_job(
-                    job, resume_path, resume_text, resume_data
-                )
+                result = await self._process_single_job(job, resume_path, resume_text)
                 results.append(result)
                 self.current_progress["completed"] = i + 1
                 self.current_progress["results"].append(result)
 
-                # Delay between applications
+                # Delay between jobs to respect RPM limits
                 if i < len(jobs_to_process) - 1:
-                    await asyncio.sleep(settings.APPLY_DELAY_SECONDS)
+                    wait = settings.APPLY_DELAY_SECONDS
+                    print(f"[Engine] Waiting {wait}s before next job...")
+                    await asyncio.sleep(wait)
 
         except Exception as e:
-            self.current_progress["status"] = f"Error: {str(e)}"
             import traceback
+            self.current_progress["status"] = f"❌ Error: {e}"
             traceback.print_exc()
         finally:
             self.is_running = False
             self.current_progress["status"] = "completed"
 
+        successful = sum(1 for r in results if r.get("status") in ("applied", "ready"))
+        failed = sum(1 for r in results if r.get("status") == "failed")
+        print(f"[Engine] Done. Successful: {successful}, Failed: {failed}")
+
         return {
             "total_processed": len(results),
-            "successful": sum(1 for r in results if r.get("status") == "applied"),
-            "failed": sum(1 for r in results if r.get("status") == "failed"),
+            "successful": successful,
+            "failed": failed,
             "results": results,
         }
 
     async def _process_single_job(
-        self, job: dict, resume_path: str, resume_text: str, resume_data: dict
+        self, job: dict, resume_path: str, resume_text: str
     ) -> dict:
-        """Process a single job: analyze → tailor → record."""
+        """
+        Process a single job using exactly ONE Gemini call:
+        analyze + LaTeX tailoring + cover letter → all at once.
+        """
         job_id = job.get("id")
         result = {
             "job_id": job_id,
@@ -140,122 +145,157 @@ class AutoApplyEngine:
             "status": "pending",
             "match_score": 0,
             "tailored_resume": None,
+            "cover_letter": "",
+            "changes_made": [],
             "error": None,
         }
 
         try:
-            # Step 1: Analyze, Tailor, and Generate Cover Letter in ONE call
-            from backend.resume.unified_processor import unified_processor
-            
-            applicant_name = await get_setting("applicant_name") or "Applicant"
-            
-            # Ensure we have a job description
+            # ── Ensure we have a real job description ──────────────────────
             desc = job.get("description", "")
             if not desc or len(desc) < 100:
-                from backend.search.job_parser import job_parser
-                desc = await job_parser.fetch_job_description(job.get("url", ""), job.get("ats_platform", "default"))
-                if desc:
-                    job["description"] = desc
+                print(f"[Engine] Short description for {job.get('title')} — trying to fetch from URL...")
+                try:
+                    from backend.search.job_parser import job_parser
+                    fetched = await job_parser.fetch_job_description(
+                        job.get("url", ""),
+                        job.get("ats_platform", "default"),
+                    )
+                    if fetched and len(fetched) > 100:
+                        desc = fetched
+                        job["description"] = desc
+                except Exception as fetch_err:
+                    print(f"[Engine] Could not fetch JD: {fetch_err}")
 
-            # Unified Processing
-            print(f"[Engine] Starting unified AI processing for {job.get('title')} at {job.get('company')}...")
+            if not desc:
+                result["status"] = "failed"
+                result["error"] = "No job description available — cannot analyze."
+                return result
+
+            # ── Get applicant name from DB or .env ─────────────────────────
+            applicant_name = (
+                await get_setting("applicant_name")
+                or settings.APPLICANT_NAME
+                or "Applicant"
+            )
+
+            # ── ONE Gemini call: analyze + tailor + cover letter ───────────
+            print(f"[Engine] 🤖 Calling Gemini for: {job.get('title')} @ {job.get('company')}")
             ai_data = await unified_processor.process_job(
-                resume_text,
-                resume_path,
-                job.get("description", ""),
-                job.get("title", ""),
-                job.get("company", ""),
-                applicant_name
+                resume_text=resume_text,
+                resume_path=resume_path,
+                job_description=desc,
+                job_title=job.get("title", ""),
+                company=job.get("company", ""),
+                applicant_name=applicant_name,
             )
 
             if ai_data.get("error"):
+                # Detect daily quota - don't continue processing
+                if "DAILY_LIMIT_EXCEEDED" in str(ai_data["error"]):
+                    self.is_running = False  # Stop the loop
+                    result["status"] = "failed"
+                    result["error"] = ai_data["error"]
+                    return result
                 result["status"] = "failed"
                 result["error"] = f"AI processing failed: {ai_data['error']}"
                 return result
 
-            # Map unified results back to result dict
             match_score = ai_data.get("match_score", 0)
             result["match_score"] = match_score
             result["cover_letter"] = ai_data.get("cover_letter", "")
-            
-            # Step 2: Handle LaTeX Tailoring (if applicable and requested)
-            suffix = Path(resume_path).suffix.lower()
-            if suffix == ".tex" and match_score < 95:
-                # We still use the existing tailor logic to actually edit the LaTeX file
-                # but we pass the already generated analysis to save a call
-                tailor_result = await resume_tailor.tailor(
-                    resume_path,
-                    job.get("description", ""),
-                    ai_data, # Use unified AI data as analysis
-                    job.get("title", ""),
-                    job.get("company", ""),
+
+            # ── Apply LaTeX changes (no extra Gemini call needed) ──────────
+            latex_replacements = ai_data.get("latex_replacements", {})
+            tailored_path = None
+
+            if Path(resume_path).suffix.lower() == ".tex" and latex_replacements:
+                tailored_path = unified_processor.apply_latex_changes(
+                    resume_path=resume_path,
+                    latex_replacements=latex_replacements,
+                    job_title=job.get("title", ""),
+                    company=job.get("company", ""),
                 )
-                if tailor_result.get("output_path"):
-                    result["tailored_resume"] = tailor_result["output_path"]
-                    result["changes_made"] = tailor_result.get("changes_made", [])
+                if tailored_path:
+                    result["tailored_resume"] = tailored_path
+                    result["changes_made"] = [
+                        {"old": k[:80], "new": v[:80]}
+                        for k, v in latex_replacements.items()
+                    ]
+                else:
+                    result["tailored_resume"] = resume_path
             else:
-                # For non-LaTeX or good match, use original resume
+                # For PDF/TXT or no replacements, use original resume
                 result["tailored_resume"] = resume_path
                 result["changes_made"] = []
 
-            # Update job record in database
+            # ── Update job record in database ──────────────────────────────
             if job_id:
                 await update_job(job_id, {
                     "match_score": match_score,
                     "status": "analyzed",
-                    "keywords_missing": json.dumps(ai_data.get("missing_keywords", []))
+                    "keywords_missing": json.dumps(ai_data.get("missing_keywords", [])),
                 })
 
-            # Step 3: Check match score threshold
+            # ── Skip if match score too low ────────────────────────────────
             if match_score < 40:
-                result["status"] = "failed"
-                result["error"] = f"Match score too low ({match_score}%)"
+                result["status"] = "skipped"
+                result["error"] = f"Match score too low ({match_score}%) — skipped to save quota."
                 return result
 
-            # Step 4: Record the application (auto-apply via browser is complex)
+            # ── Record the application ─────────────────────────────────────
             app_data = {
                 "job_id": job_id,
                 "resume_path": resume_path,
                 "tailored_resume_path": result.get("tailored_resume", ""),
                 "status": "ready",
-                "notes": f"Match score: {match_score}%. Tailored resume generated.",
+                "notes": (
+                    f"Match: {match_score}%. "
+                    f"Tailored: {'Yes' if tailored_path else 'No'}. "
+                    f"Cover letter: {'Yes' if result['cover_letter'] else 'No'}."
+                ),
             }
             app_id = await insert_application(app_data)
 
-            # Step 4: Attempt auto-apply via browser
+            # ── Attempt browser-based auto-submit ─────────────────────────
             apply_success = await self._attempt_apply(
-                job, result.get("tailored_resume") or resume_path, result.get("cover_letter", "")
+                job,
+                result.get("tailored_resume") or resume_path,
+                result.get("cover_letter", ""),
             )
 
             if apply_success:
                 result["status"] = "applied"
                 if job_id:
                     await update_job(job_id, {"status": "applied"})
-                await update_application(app_id, {
-                    "status": "applied",
-                    "applied_at": datetime.now().isoformat(),
-                })
+                if app_id:
+                    await update_application(app_id, {
+                        "status": "applied",
+                        "applied_at": datetime.now().isoformat(),
+                    })
             else:
                 result["status"] = "ready"
-                result["note"] = "Auto-apply prepared. Manual submission may be needed."
+                result["note"] = (
+                    "Application prepared. Tailored resume and cover letter are ready. "
+                    "Manual submission needed for this platform."
+                )
 
         except Exception as e:
             import traceback
             error_trace = traceback.format_exc()
-            print(f"[Engine Error] Job {job_id}: {error_trace}")
+            print(f"[Engine Error] Job {job_id}:\n{error_trace}")
             result["status"] = "failed"
             result["error"] = str(e)
-            if "match_score" not in result or result["match_score"] == 0:
-                result["match_score"] = 0
 
         return result
 
-    async def _attempt_apply(self, job: dict, resume_path: str, cover_letter: str = "") -> bool:
+    async def _attempt_apply(
+        self, job: dict, resume_path: str, cover_letter: str = ""
+    ) -> bool:
         """
-        Attempt to auto-apply to a job using browser automation.
+        Attempt browser-based auto-submission.
         Currently supports Greenhouse and Lever.
-
-        Returns True if application was submitted successfully.
+        Returns True if submitted successfully.
         """
         platform = job.get("ats_platform", "").lower()
 
@@ -267,7 +307,7 @@ class AutoApplyEngine:
                 from backend.apply.lever import apply_lever
                 return await apply_lever(job, resume_path, cover_letter)
             else:
-                # For unsupported platforms, mark as ready for manual apply
+                # Platform not supported for auto-submit yet
                 return False
         except Exception as e:
             print(f"[AutoApply Error] {platform}: {e}")

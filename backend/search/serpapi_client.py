@@ -1,6 +1,7 @@
 """
 AI Job Agent - SerpAPI Client
-Searches for jobs across ATS platforms using Google search with site: operators.
+Searches for jobs using SerpAPI's dedicated Google Jobs engine.
+Returns structured job data with full descriptions, company names, and apply links.
 """
 
 import asyncio
@@ -11,67 +12,52 @@ from backend.config import settings
 
 
 class SerpAPIClient:
-    """Client for searching jobs via SerpAPI Google Search."""
+    """Client for searching jobs via SerpAPI Google Jobs engine."""
 
     BASE_URL = "https://serpapi.com/search.json"
 
     def __init__(self):
         self.api_key = settings.SERPAPI_KEY
-        self.ats_platforms = settings.ATS_PLATFORMS
 
-    def _build_site_query(self, platforms: list = None) -> str:
-        """Build the site: OR chain for Google search."""
-        targets = platforms or self.ats_platforms
-        site_parts = [f"site:{domain}" for domain in targets]
-        return f"({' OR '.join(site_parts)})"
-
-    def _build_search_query(
+    def _build_query(
         self,
         job_title: str,
         location: str = "",
         job_type: str = "",
         exclude_terms: list = None,
-        platforms: list = None,
     ) -> str:
-        """
-        Build a full Google search query.
-        Example: (site:greenhouse.io OR site:lever.co) ("software engineer" OR "data scientist") ("Bangalore" OR "remote")
-        """
-        site_query = self._build_site_query(platforms)
-        
-        # Handle multiple job titles
+        """Build a natural language query for Google Jobs."""
         titles = [t.strip() for t in job_title.split(",") if t.strip()]
-        if len(titles) > 1:
-            title_query = " OR ".join(f'"{t}"' for t in titles)
-            query = f'{site_query} ({title_query})'
-        elif titles:
-            query = f'{site_query} "{titles[0]}"'
-        else:
-            query = f'{site_query}'
+        query = " OR ".join(titles) if len(titles) > 1 else (titles[0] if titles else "")
 
-        # Handle multiple locations
         if location:
-            locations = [loc.strip() for loc in location.split(",") if loc.strip()]
-            if len(locations) > 1:
-                loc_query = " OR ".join(f'"{loc}"' for loc in locations)
-                query += f" ({loc_query})"
-            elif locations:
-                query += f' "{locations[0]}"'
+            locs = [l.strip() for l in location.split(",") if l.strip()]
+            query += " " + " OR ".join(locs)
 
-        # Handle multiple job types
         if job_type:
-            types = [t.strip() for t in job_type.split(",") if t.strip()]
-            if len(types) > 1:
-                type_query = " OR ".join(f'"{t}"' for t in types)
-                query += f" ({type_query})"
-            elif types:
-                query += f' "{types[0]}"'
+            query += f" {job_type}"
 
         if exclude_terms:
-            for term in exclude_terms:
-                query += f" -{term}"
+            query += " " + " ".join(f"-{t}" for t in exclude_terms)
 
-        return query
+        return query.strip()
+
+    def _employment_type_chip(self, job_type: str) -> str:
+        """Convert job_type string to Google Jobs chip filter."""
+        mapping = {
+            "fulltime": "employment_type:FULLTIME",
+            "full-time": "employment_type:FULLTIME",
+            "full time": "employment_type:FULLTIME",
+            "parttime": "employment_type:PARTTIME",
+            "part-time": "employment_type:PARTTIME",
+            "part time": "employment_type:PARTTIME",
+            "internship": "employment_type:INTERN",
+            "intern": "employment_type:INTERN",
+            "contractor": "employment_type:CONTRACTOR",
+            "contract": "employment_type:CONTRACTOR",
+            "remote": "work_from_home:1",
+        }
+        return mapping.get(job_type.lower().strip(), "")
 
     async def search(
         self,
@@ -80,56 +66,66 @@ class SerpAPIClient:
         job_type: str = "",
         num_results: int = 20,
         date_filter: str = "",
-        platforms: list = None,
+        platforms: list = None,  # kept for API compatibility but not used in google_jobs
         exclude_terms: list = None,
     ) -> list:
         """
-        Search for jobs across ATS platforms.
+        Search for jobs using SerpAPI Google Jobs engine.
 
         Args:
-            job_title: Job title to search for (e.g., "software engineer intern")
-            location: Location filter (e.g., "Bangalore, remote")
-            num_results: Maximum number of results to fetch
-            date_filter: Time filter - 'd', 'w', etc.
-            platforms: Optional list of specific ATS domains to search
-            exclude_terms: Terms to exclude from search results
-
+            job_title: Job title to search for (can be comma-separated for multiple)
+            location: Location filter (e.g., "Bangalore, Remote")
+            job_type: Employment type (e.g., "Remote", "Internship", "Full-time")
+            num_results: Maximum number of results
+            date_filter: Time filter - 'd'=today, 'w'=week, 'm'=month, '3d'=3 days
+            exclude_terms: Terms to exclude from search
         Returns:
-            List of job result dicts with title, link, snippet, platform
+            List of structured job dicts
         """
-        query = self._build_search_query(job_title, location, job_type, exclude_terms, platforms)
+        query = self._build_query(job_title, location, job_type, exclude_terms)
 
         all_results = []
-        start = 0
-        per_page = min(num_results, 10)  # Google returns max 10 per page
+        next_page_token = None
+
+        # Build chips for filters
+        chips_parts = []
+        if job_type:
+            chip = self._employment_type_chip(job_type)
+            if chip:
+                chips_parts.append(chip)
+
+        # Date filter chip
+        date_chip_map = {
+            "d": "date_posted:today",
+            "3d": "date_posted:3days",
+            "w": "date_posted:week",
+            "m": "date_posted:month",
+        }
+        if date_filter and date_filter in date_chip_map:
+            chips_parts.append(date_chip_map[date_filter])
+
+        chips = ",".join(chips_parts) if chips_parts else None
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             while len(all_results) < num_results:
+                # NOTE: Google Jobs API deprecated 'start', now uses next_page_token
                 params = {
-                    "engine": "google",
+                    "engine": "google_jobs",
                     "q": query,
                     "api_key": self.api_key,
-                    "num": per_page,
-                    "start": start,
+                    "hl": "en",
                 }
 
-                if date_filter:
-                    tbs_map = {
-                        "m30": "qdr:n30",
-                        "h1": "qdr:h",
-                        "h2": "qdr:h2",
-                        "h3": "qdr:h3",
-                        "h6": "qdr:h6",
-                        "h12": "qdr:h12",
-                        "d": "qdr:d",
-                        "d2": "qdr:d2",
-                        "d3": "qdr:d3",
-                        "w": "qdr:w",
-                        "m": "qdr:m",
-                        "y": "qdr:y",
-                    }
-                    if date_filter in tbs_map:
-                        params["tbs"] = tbs_map[date_filter]
+                # Only add pagination token if it's not the first page
+                if next_page_token:
+                    params["next_page_token"] = next_page_token
+
+                if chips:
+                    params["chips"] = chips
+
+                if location:
+                    # Use first location for geo context
+                    params["location"] = location.split(",")[0].strip()
 
                 try:
                     response = await client.get(self.BASE_URL, params=params)
@@ -139,16 +135,24 @@ class SerpAPIClient:
                         print(f"[SerpAPI Error] {data['error']}")
                         break
 
-                    organic_results = data.get("organic_results", [])
-                    if not organic_results:
+                    job_results = data.get("jobs_results", [])
+                    if not job_results:
+                        print(f"[SerpAPI] No jobs_results in response. Keys: {list(data.keys())}")
                         break
 
-                    for result in organic_results:
-                        job = self._parse_result(result)
+                    for job_data in job_results:
+                        job = self._parse_google_job(job_data)
                         if job:
                             all_results.append(job)
 
-                    start += per_page
+                    print(f"[SerpAPI] Fetched {len(job_results)} jobs (total so far: {len(all_results)})")
+
+                    # Check if more pages available via next_page_token
+                    serpapi_pagination = data.get("serpapi_pagination", {})
+                    next_page_token = serpapi_pagination.get("next_page_token")
+                    if not next_page_token:
+                        break  # No more pages
+
                     await asyncio.sleep(settings.SEARCH_DELAY_SECONDS)
 
                 except Exception as e:
@@ -157,85 +161,81 @@ class SerpAPIClient:
 
         return all_results[:num_results]
 
-    def _parse_result(self, result: dict) -> Optional[dict]:
-        """Parse a single search result into a structured job dict."""
-        link = result.get("link", "")
-        if not link:
-            return None
+    def _parse_google_job(self, job_data: dict) -> Optional[dict]:
+        """Parse a Google Jobs result into a structured job dict."""
+        title = job_data.get("title", "")
+        company = job_data.get("company_name", "Unknown Company")
+        location = job_data.get("location", "")
+        description = job_data.get("description", "")
+        detected = job_data.get("detected_extensions", {})
 
-        platform = "unknown"
-        for domain in self.ats_platforms:
-            if domain in link:
-                platform = domain.split(".")[0]
+        # Get best apply link
+        apply_options = job_data.get("apply_options", [])
+        url = ""
+        ats_platform = "unknown"
+
+        # Try to find a known ATS platform link first
+        ats_priority = [
+            "greenhouse.io", "lever.co", "myworkdayjobs.com",
+            "icims.com", "smartrecruiters.com", "breezy.hr", "jobvite.com",
+            "taleo.net", "successfactors.com", "jazzhr.com",
+        ]
+
+        for opt in apply_options:
+            link = opt.get("link", "")
+            for plat in ats_priority:
+                if plat in link:
+                    url = link
+                    ats_platform = plat.split(".")[0]
+                    break
+            if url:
                 break
 
-        title = result.get("title", "")
-        snippet = result.get("snippet", "")
-        company = self._extract_company(title, snippet, platform)
+        # Fall back to first available apply link
+        if not url and apply_options:
+            url = apply_options[0].get("link", "")
+
+        # Fall back to job listing URL from related_links
+        if not url:
+            related = job_data.get("related_links", [])
+            if related:
+                url = related[0].get("link", "")
+
+        if not url and not title:
+            return None
+
+        # Detect platform from URL if not already found
+        if ats_platform == "unknown" and url:
+            for plat in ats_priority:
+                if plat in url:
+                    ats_platform = plat.split(".")[0]
+                    break
+
+        # Build a rich description
+        desc_parts = [description]
+        if detected.get("work_from_home"):
+            desc_parts.append("Work from home: Yes")
+        if detected.get("schedule_type"):
+            desc_parts.append(f"Schedule: {detected['schedule_type']}")
+        if detected.get("salary"):
+            desc_parts.append(f"Salary: {detected['salary']}")
+        if detected.get("posted_at"):
+            desc_parts.append(f"Posted: {detected['posted_at']}")
+
+        full_description = "\n\n".join(p for p in desc_parts if p)
 
         return {
-            "title": self._clean_title(title),
+            "title": title,
             "company": company,
-            "location": self._extract_location(snippet),
-            "url": link,
-            "description": snippet,
-            "ats_platform": platform,
+            "location": location,
+            "url": url,
+            "description": full_description,
+            "ats_platform": ats_platform,
+            "employment_type": detected.get("schedule_type", ""),
+            "salary": detected.get("salary", ""),
+            "posted_at": detected.get("posted_at", ""),
+            "work_from_home": detected.get("work_from_home", False),
         }
-
-    def _clean_title(self, title: str) -> str:
-        """Clean the job title from search result."""
-        for sep in [" - ", " | ", " — ", " · "]:
-            if sep in title:
-                title = title.split(sep)[0]
-        return title.strip()
-
-    def _extract_company(self, title: str, snippet: str, platform: str) -> str:
-        """Attempt to extract company name from title/snippet."""
-        clean_t = title
-        for p in [" | ", " — ", " - ", " · "]:
-            if p in clean_t:
-                clean_t = clean_t.split(p)[0]
-
-        for sep in [" @ ", " at ", " at: "]:
-            if sep in clean_t:
-                parts = clean_t.split(sep)
-                if len(parts) >= 2:
-                    candidate = parts[1].strip()
-                    candidate = re.sub(r'\b(19|20)\d{2}\b', '', candidate)
-                    candidate = candidate.split(',')[0].strip()
-                    if candidate and candidate.lower() not in ["greenhouse", "lever", "jobs", "hiring"]:
-                        return candidate
-
-        for sep in [" - ", " | ", " — "]:
-            if sep in title:
-                parts = title.split(sep)
-                if len(parts) >= 2:
-                    candidate = parts[1].strip()
-                    if candidate.lower() not in [platform.lower(), "greenhouse", "lever", "jobs"]:
-                        return candidate
-
-        return "Unknown Company"
-
-    def _extract_location(self, snippet: str) -> str:
-        """Try to extract location from the snippet text."""
-        location_keywords = [
-            "remote", "hybrid", "on-site", "onsite", "bangalore", "mumbai", 
-            "delhi", "hyderabad", "pune", "chennai", "kolkata", "india",
-            "new york", "san francisco", "austin", "texas", "london", "usa"
-        ]
-        found = []
-        snippet_lower = snippet.lower()
-        for kw in location_keywords:
-            if kw in snippet_lower:
-                found.append(kw.title())
-        
-        location_match = re.search(r'\bin\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', snippet)
-        if location_match:
-            loc = location_match.group(1)
-            if loc.lower() not in ["the", "this", "our"]:
-                found.append(loc)
-
-        return ", ".join(list(set(found))) if found else ""
 
 
 # Singleton
