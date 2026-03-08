@@ -30,41 +30,65 @@ class UnifiedAIProcessor:
         self.model = genai.GenerativeModel(self.model_name)
 
     async def _generate_with_retry(self, prompt: str, max_retries: int = 4) -> Any:
-        """Call Gemini with smart retry. Has a 90s hard timeout per attempt so it never hangs."""
+        """Call Gemini with smart retry. Sets a hard API-level timeout AND handles 503s."""
         for attempt in range(max_retries):
             try:
-                # Hard timeout — Gemini can silently hang without one
+                # request_options timeout= controls the actual gRPC/SDK timeout.
+                # asyncio.wait_for is a safety net in case that doesn't fire.
                 response = await asyncio.wait_for(
-                    self.model.generate_content_async(prompt),
-                    timeout=90.0
+                    self.model.generate_content_async(
+                        prompt,
+                        request_options={"timeout": 55},  # Hard 55s API-level timeout
+                    ),
+                    timeout=70.0  # asyncio safety net
                 )
                 return response
             except asyncio.TimeoutError:
                 if attempt < max_retries - 1:
-                    print(f"[Unified Processor] ⏱ Gemini timed out (90s). Retrying... ({attempt+1}/{max_retries})")
+                    print(f"[Unified Processor] ⏱ Gemini timed out (70s). Retrying... ({attempt+1}/{max_retries})")
                     await asyncio.sleep(10)
                 else:
-                    raise Exception("Gemini API timed out after 90s on all attempts. Check API key / network.")
+                    raise Exception("Gemini API timed out on all attempts. Check API key / network.")
             except Exception as e:
                 error_msg = str(e)
+
+                # ── Daily quota exhausted — stop immediately, no point retrying ──
+                if "429" in error_msg and ("GenerateRequestsPerDay" in error_msg or "quota" in error_msg.lower()):
+                    print("[Unified Processor] CRITICAL: Daily API quota exceeded.")
+                    raise Exception(
+                        "DAILY_LIMIT_EXCEEDED: Google Free Tier daily limit (1,500 requests) "
+                        "is used up. Please wait 24 hours or use a new API key in your .env file."
+                    )
+
+                # ── RPM rate limit (429) — wait and retry ──
                 if "429" in error_msg:
-                    if "GenerateRequestsPerDay" in error_msg or "quota" in error_msg.lower():
-                        print("[Unified Processor] CRITICAL: Daily API quota exceeded.")
-                        raise Exception(
-                            "DAILY_LIMIT_EXCEEDED: Google Free Tier daily limit (1,500 requests) "
-                            "is used up. Please wait 24 hours or use a new API key in your .env file."
-                        )
                     if attempt < max_retries - 1:
                         wait_time = 35.0
                         match = re.search(r"retry[_ ]?(?:after|in)[\s_]*([\d.]+)s", error_msg, re.IGNORECASE)
                         if match:
                             wait_time = float(match.group(1)) + 3
-                        print(f"[Unified Processor] Rate limit. Waiting {wait_time:.0f}s... ({attempt+1}/{max_retries})")
+                        print(f"[Unified Processor] Rate limit (429). Waiting {wait_time:.0f}s... ({attempt+1}/{max_retries})")
                         await asyncio.sleep(wait_time)
+                        continue
                     else:
                         raise
-                else:
-                    raise
+
+                # ── 503 / transient server error / Illegal metadata — retry quickly ──
+                if ("503" in error_msg or "502" in error_msg
+                        or "Service Unavailable" in error_msg.lower()
+                        or "Illegal metadata" in error_msg
+                        or "internal error" in error_msg.lower()):
+                    if attempt < max_retries - 1:
+                        wait_time = 20.0
+                        print(f"[Unified Processor] ⚠ Gemini server error ({error_msg[:80]}). "
+                              f"Retrying in {wait_time}s... ({attempt+1}/{max_retries})")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        raise Exception(f"Gemini returned persistent server error after {max_retries} attempts: {error_msg[:200]}")
+
+                # ── Any other error — fail fast ──
+                raise
         return None
 
 
