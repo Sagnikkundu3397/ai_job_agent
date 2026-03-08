@@ -6,6 +6,7 @@ One Gemini call per job via unified_processor (no duplicate calls).
 
 import asyncio
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from backend.config import settings
@@ -153,8 +154,8 @@ class AutoApplyEngine:
         try:
             # ── Ensure we have a real job description ──────────────────────
             desc = job.get("description", "")
-            if not desc or len(desc) < 100:
-                print(f"[Engine] Short description for {job.get('title')} — trying to fetch from URL...")
+            if not desc or len(desc) < 300:
+                print(f"[Engine] Short/missing description for {job.get('title')} — trying to fetch from URL...")
                 try:
                     from backend.search.job_parser import job_parser
                     fetched = await job_parser.fetch_job_description(
@@ -237,22 +238,39 @@ class AutoApplyEngine:
                     "keywords_missing": json.dumps(ai_data.get("missing_keywords", [])),
                 })
 
-            # ── Skip if match score too low ────────────────────────────────
-            if match_score < 40:
+            # ── Skip if match score genuinely too low ──────────────────────────────
+            if match_score < 25:
                 result["status"] = "skipped"
-                result["error"] = f"Match score too low ({match_score}%) — skipped to save quota."
+                result["error"] = f"Match score too low ({match_score}%) — skipped."
                 return result
+
+            # ── Save cover letter to file ──────────────────────────────────
+            cover_letter_path = ""
+            cover_letter_text = result.get("cover_letter", "")
+            if cover_letter_text and job_id:
+                try:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    company_slug = re.sub(r"[^a-zA-Z0-9]", "_", job.get("company", "unknown"))[:25]
+                    title_slug = re.sub(r"[^a-zA-Z0-9]", "_", job.get("title", "job"))[:20]
+                    cl_filename = f"cl_{company_slug}_{title_slug}_{timestamp}.txt"
+                    cl_path = settings.COVER_LETTERS_DIR / cl_filename
+                    cl_path.write_text(cover_letter_text, encoding="utf-8")
+                    cover_letter_path = str(cl_path)
+                    print(f"[Engine] 📝 Cover letter saved: {cl_filename}")
+                except Exception as cl_err:
+                    print(f"[Engine] ⚠ Could not save cover letter: {cl_err}")
 
             # ── Record the application ─────────────────────────────────────
             app_data = {
                 "job_id": job_id,
                 "resume_path": resume_path,
                 "tailored_resume_path": result.get("tailored_resume", ""),
+                "cover_letter_path": cover_letter_path,
                 "status": "ready",
                 "notes": (
                     f"Match: {match_score}%. "
                     f"Tailored: {'Yes' if tailored_path else 'No'}. "
-                    f"Cover letter: {'Yes' if result['cover_letter'] else 'No'}."
+                    f"Cover letter: {'Yes' if cover_letter_path else 'No'}."
                 ),
             }
             app_id = await insert_application(app_data)

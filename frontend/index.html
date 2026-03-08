@@ -358,6 +358,48 @@
         </section>
     </main>
 
+    <!-- ===== COVER LETTER MODAL ===== -->
+    <div class="modal-overlay" id="clModal" onclick="closeModal('clModal')">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title" id="clModalTitle">Cover Letter</h3>
+                    <p class="modal-subtitle" id="clModalSubtitle"></p>
+                </div>
+                <button class="modal-close" onclick="closeModal('clModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="cl-badge">📋 ATS-Optimized Cover Letter</div>
+                <pre class="modal-text" id="clModalText"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="copyModalText('clModalText')">📋 Copy Text</button>
+                <button class="btn btn-primary" onclick="closeModal('clModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== RESUME MODAL ===== -->
+    <div class="modal-overlay" id="resumeModal" onclick="closeModal('resumeModal')">
+        <div class="modal-card modal-card-wide" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title" id="resumeModalTitle">Tailored Resume</h3>
+                    <p class="modal-subtitle" id="resumeModalSubtitle"></p>
+                </div>
+                <button class="modal-close" onclick="closeModal('resumeModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="cl-badge" id="resumeModalBadge">📄 Resume Content</div>
+                <pre class="modal-text" id="resumeModalText"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="copyModalText('resumeModalText')">📋 Copy Text</button>
+                <button class="btn btn-primary" onclick="closeModal('resumeModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== TOAST NOTIFICATIONS ===== -->
     <div class="toast-container" id="toastContainer"></div>
 

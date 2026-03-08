@@ -765,12 +765,42 @@ function updateProgressUI(progress) {
         ? `Processing: ${progress.current_job}`
         : `${progress.completed}/${progress.total} completed`;
 
-    if (progress.results) {
+    if (progress.results && progress.results.length > 0) {
         log.innerHTML = progress.results.map(r => {
-            const cls = r.status === 'applied' ? 'success' : r.status === 'failed' ? 'error' : '';
-            const errorMsg = r.error ? `<br><small style="color: #ff8080;">Error: ${escapeHtml(r.error)}</small>` : '';
+            const statusEmoji = {
+                'applied': '✅',
+                'ready': '📋',
+                'skipped': '⏭️',
+                'failed': '❌',
+                'pending': '⏳'
+            }[r.status] || '•';
+
+            const cls = r.status === 'applied' ? 'success'
+                : r.status === 'failed' ? 'error'
+                    : r.status === 'ready' ? 'ready'
+                        : '';
+
+            const scoreText = r.match_score > 0 ? ` · Match: ${r.match_score}%` : '';
+
+            const hasCL = r.cover_letter && r.cover_letter.length > 20;
+            const hasResume = r.tailored_resume && r.tailored_resume !== '';
+
+            const extras = [];
+            if (hasCL) extras.push('📝 Cover letter saved');
+            if (hasResume) extras.push('📄 Resume tailored');
+            const extrasText = extras.length > 0 ? ` · ${extras.join(' · ')}` : '';
+
+            const errorMsg = r.error ? `<div class="log-error">⚠ ${escapeHtml(r.error)}</div>` : '';
+            const readyNote = r.status === 'ready'
+                ? `<div class="log-note">👆 Ready for manual submission${r.note ? '' : ''}</div>` : '';
+
             return `<div class="log-entry ${cls}">
-                [${r.status.toUpperCase()}] ${escapeHtml(r.job_title)} @ ${escapeHtml(r.company)} — Score: ${r.match_score}%${errorMsg}
+                <span class="log-status">${statusEmoji}</span>
+                <div class="log-content">
+                    <strong>${escapeHtml(r.job_title || '?')} @ ${escapeHtml(r.company || '?')}</strong>
+                    <span class="log-meta">${scoreText}${extrasText}</span>
+                    ${errorMsg}${readyNote}
+                </div>
             </div>`;
         }).join('');
     }
@@ -798,7 +828,7 @@ function renderHistory(applications) {
     if (!applications.length) {
         tbody.innerHTML = `
             <tr class="empty-row">
-                <td colspan="6">
+                <td colspan="7">
                     <div class="empty-state-inline">
                         <p>No applications yet. Start by searching for jobs!</p>
                     </div>
@@ -807,24 +837,122 @@ function renderHistory(applications) {
         return;
     }
 
-    tbody.innerHTML = applications.map(app => `
-        <tr>
-            <td>${escapeHtml(app.job_title || 'Unknown')}</td>
+    tbody.innerHTML = applications.map(app => {
+        const score = app.match_score || 0;
+        const scoreClass = score >= 70 ? 'high' : score >= 40 ? 'medium' : score > 0 ? 'low' : 'none';
+        const scoreBadge = score > 0
+            ? `<span class="score-badge ${scoreClass}">${score}%</span>`
+            : `<span class="score-badge none">—</span>`;
+
+        const hasCL = app.cover_letter_path && app.cover_letter_path.length > 0;
+        const hasResume = app.tailored_resume_path && app.tailored_resume_path.length > 0;
+
+        const clBtn = hasCL
+            ? `<button class="history-action-btn cl-btn" onclick="viewCoverLetter(${app.id})" title="View Cover Letter">📋 Cover Letter</button>`
+            : `<span class="history-action-btn disabled" title="No cover letter saved">📋 —</span>`;
+
+        const resumeBtn = hasResume
+            ? `<button class="history-action-btn resume-btn" onclick="viewResume(${app.id})" title="View Tailored Resume">📄 Resume</button>`
+            : `<span class="history-action-btn disabled" title="No tailored resume">📄 —</span>`;
+
+        const jobLink = app.job_url
+            ? `<a class="history-action-btn link-btn" href="${escapeHtml(app.job_url)}" target="_blank" title="View Job Listing">🔗</a>`
+            : '';
+
+        return `<tr>
+            <td><span class="history-job-title">${escapeHtml(app.job_title || 'Unknown')}</span></td>
             <td>${escapeHtml(app.company || 'Unknown')}</td>
             <td><span class="status-badge ${app.status}">${app.status}</span></td>
-            <td>${app.match_score ? app.match_score + '%' : '—'}</td>
-            <td>${app.applied_at ? new Date(app.applied_at).toLocaleDateString() : '—'}</td>
+            <td>${scoreBadge}</td>
+            <td>${app.applied_at ? new Date(app.applied_at).toLocaleDateString() : app.created_at ? new Date(app.created_at).toLocaleDateString() : '—'}</td>
             <td>
-                ${app.job_url ? `<a class="job-action-btn" href="${escapeHtml(app.job_url)}" target="_blank" title="View">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                        <polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                    </svg>
-                </a>` : '—'}
+                <div class="history-actions">
+                    ${clBtn}
+                    ${resumeBtn}
+                    ${jobLink}
+                </div>
             </td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
 }
+
+
+// ========================
+// Modals — Cover Letter & Resume
+// ========================
+
+async function viewCoverLetter(appId) {
+    const modal = document.getElementById('clModal');
+    document.getElementById('clModalTitle').textContent = 'Cover Letter';
+    document.getElementById('clModalSubtitle').textContent = 'Loading...';
+    document.getElementById('clModalText').textContent = '';
+    modal.classList.add('active');
+
+    try {
+        const res = await fetch(`${API_BASE}/api/applications/${appId}/cover-letter`);
+        if (!res.ok) {
+            const err = await res.json();
+            document.getElementById('clModalSubtitle').textContent = '⚠️ ' + (err.detail || 'Not available');
+            document.getElementById('clModalText').textContent = '';
+            return;
+        }
+        const data = await res.json();
+        document.getElementById('clModalTitle').textContent = `Cover Letter — ${data.job_title}`;
+        document.getElementById('clModalSubtitle').textContent = `${data.company}`;
+        document.getElementById('clModalText').textContent = data.cover_letter;
+    } catch (err) {
+        document.getElementById('clModalSubtitle').textContent = '❌ Failed to load';
+    }
+}
+
+async function viewResume(appId) {
+    const modal = document.getElementById('resumeModal');
+    document.getElementById('resumeModalTitle').textContent = 'Tailored Resume';
+    document.getElementById('resumeModalSubtitle').textContent = 'Loading...';
+    document.getElementById('resumeModalText').textContent = '';
+    document.getElementById('resumeModalBadge').textContent = '📄 Resume Content';
+    modal.classList.add('active');
+
+    try {
+        const res = await fetch(`${API_BASE}/api/applications/${appId}/resume`);
+        if (!res.ok) {
+            const err = await res.json();
+            document.getElementById('resumeModalSubtitle').textContent = '⚠️ ' + (err.detail || 'Not available');
+            return;
+        }
+        const data = await res.json();
+        document.getElementById('resumeModalTitle').textContent = `Resume — ${data.job_title}`;
+        document.getElementById('resumeModalSubtitle').textContent = `${data.company} · ${data.filename}`;
+        document.getElementById('resumeModalBadge').textContent = data.is_tailored
+            ? '✨ AI-Tailored Resume (Job-Specific)'
+            : '📄 Base Resume (No tailoring applied)';
+        document.getElementById('resumeModalText').textContent = data.resume_content;
+    } catch (err) {
+        document.getElementById('resumeModalSubtitle').textContent = '❌ Failed to load';
+    }
+}
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.remove('active');
+}
+
+function copyModalText(textElId) {
+    const text = document.getElementById(textElId).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied to clipboard!', 'success');
+    }).catch(() => {
+        showToast('Copy failed — please select text manually', 'warning');
+    });
+}
+
+// Close modals with Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeModal('clModal');
+        closeModal('resumeModal');
+    }
+});
 
 
 // ========================

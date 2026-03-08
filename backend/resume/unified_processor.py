@@ -30,15 +30,24 @@ class UnifiedAIProcessor:
         self.model = genai.GenerativeModel(self.model_name)
 
     async def _generate_with_retry(self, prompt: str, max_retries: int = 4) -> Any:
-        """Call Gemini with smart retry: reads the suggested wait time from the error."""
+        """Call Gemini with smart retry. Has a 90s hard timeout per attempt so it never hangs."""
         for attempt in range(max_retries):
             try:
-                response = await self.model.generate_content_async(prompt)
+                # Hard timeout — Gemini can silently hang without one
+                response = await asyncio.wait_for(
+                    self.model.generate_content_async(prompt),
+                    timeout=90.0
+                )
                 return response
+            except asyncio.TimeoutError:
+                if attempt < max_retries - 1:
+                    print(f"[Unified Processor] ⏱ Gemini timed out (90s). Retrying... ({attempt+1}/{max_retries})")
+                    await asyncio.sleep(10)
+                else:
+                    raise Exception("Gemini API timed out after 90s on all attempts. Check API key / network.")
             except Exception as e:
                 error_msg = str(e)
                 if "429" in error_msg:
-                    # Check for daily (not RPM) limit — no point in retrying
                     if "GenerateRequestsPerDay" in error_msg or "quota" in error_msg.lower():
                         print("[Unified Processor] CRITICAL: Daily API quota exceeded.")
                         raise Exception(
@@ -46,18 +55,18 @@ class UnifiedAIProcessor:
                             "is used up. Please wait 24 hours or use a new API key in your .env file."
                         )
                     if attempt < max_retries - 1:
-                        # Parse the suggested retry time from the error
                         wait_time = 35.0
                         match = re.search(r"retry[_ ]?(?:after|in)[\s_]*([\d.]+)s", error_msg, re.IGNORECASE)
                         if match:
                             wait_time = float(match.group(1)) + 3
-                        print(f"[Unified Processor] Rate limit hit. Waiting {wait_time:.0f}s... (attempt {attempt+1}/{max_retries})")
+                        print(f"[Unified Processor] Rate limit. Waiting {wait_time:.0f}s... ({attempt+1}/{max_retries})")
                         await asyncio.sleep(wait_time)
                     else:
                         raise
                 else:
                     raise
         return None
+
 
     async def process_job(
         self,
@@ -82,8 +91,8 @@ class UnifiedAIProcessor:
             except Exception:
                 is_latex = False
 
-        # Truncate long JDs to save tokens (first 3000 chars is usually enough)
-        jd_trimmed = job_description[:3000] if len(job_description) > 3000 else job_description
+        # Truncate long JDs to save tokens — 4000 chars gives enough signal
+        jd_trimmed = job_description[:4000] if len(job_description) > 4000 else job_description
 
         latex_section = ""
         if is_latex:
@@ -123,7 +132,7 @@ A candidate named **{applicant_name}** is applying for **{job_title}** at **{com
 
 ---
 ## CANDIDATE RESUME (plain text):
-{resume_text[:2500]}
+{resume_text[:4000]}
 
 ---
 ## JOB DESCRIPTION:
@@ -133,7 +142,7 @@ A candidate named **{applicant_name}** is applying for **{job_title}** at **{com
 ## YOUR TASKS (all in ONE JSON response):
 
 ### TASK 1 — Resume Analysis:
-- Score the resume's fit for this JD from 0-100 (be realistic, not generous)
+- Score the resume's fit for this JD from 0-100 (be realistic but fair — for internship/entry-level roles, a score of 50-70 is normal even for good candidates)
 - List the most important keywords/skills from the JD that are MISSING from the resume
 - Write a 1-sentence overall assessment
 

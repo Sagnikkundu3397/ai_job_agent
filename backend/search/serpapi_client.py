@@ -94,15 +94,28 @@ class SerpAPIClient:
             if chip:
                 chips_parts.append(chip)
 
-        # Date filter chip
+        # Date filter chip — map all UI options to SerpAPI equivalents
         date_chip_map = {
+            # Exact SerpAPI values
             "d": "date_posted:today",
             "3d": "date_posted:3days",
             "w": "date_posted:week",
             "m": "date_posted:month",
+            # UI-specific options (map to nearest SerpAPI bucket)
+            "m30": "date_posted:today",   # Past 30 mins → today
+            "h1": "date_posted:today",    # Past 1 hour → today
+            "h2": "date_posted:today",    # Past 2 hours → today
+            "h3": "date_posted:today",    # Past 3 hours → today
+            "h6": "date_posted:today",    # Past 6 hours → today
+            "h12": "date_posted:today",   # Past 12 hours → today
+            "d2": "date_posted:3days",    # Past 2 days → 3days
+            "d3": "date_posted:3days",    # Past 3 days → 3days
+            "y": "date_posted:month",     # Past year → month (SerpAPI max)
         }
         if date_filter and date_filter in date_chip_map:
             chips_parts.append(date_chip_map[date_filter])
+        elif date_filter:
+            print(f"[SerpAPI] Unknown date_filter '{date_filter}' — skipping date chip")
 
         chips = ",".join(chips_parts) if chips_parts else None
 

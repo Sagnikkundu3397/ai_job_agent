@@ -34,6 +34,7 @@ class Settings:
     BASE_DIR: Path = BASE_DIR
     DATA_DIR: Path = BASE_DIR / "data"
     RESUMES_DIR: Path = BASE_DIR / "data" / "resumes"
+    COVER_LETTERS_DIR: Path = BASE_DIR / "data" / "cover_letters"
     DB_PATH: Path = BASE_DIR / "data" / "jobs.db"
     TEMPLATES_DIR: Path = Path(__file__).resolve().parent / "templates"
 
@@ -66,6 +67,7 @@ class Settings:
         """Create required directories if they don't exist."""
         cls.DATA_DIR.mkdir(parents=True, exist_ok=True)
         cls.RESUMES_DIR.mkdir(parents=True, exist_ok=True)
+        cls.COVER_LETTERS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 settings = Settings()

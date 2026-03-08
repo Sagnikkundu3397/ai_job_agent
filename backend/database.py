@@ -36,6 +36,7 @@ async def init_db():
                 job_id INTEGER NOT NULL,
                 resume_path TEXT DEFAULT '',
                 tailored_resume_path TEXT DEFAULT '',
+                cover_letter_path TEXT DEFAULT '',
                 status TEXT DEFAULT 'pending',
                 notes TEXT DEFAULT '',
                 applied_at TEXT,
@@ -137,12 +138,14 @@ async def insert_application(app_data: dict) -> int:
     """Insert a new application record."""
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            """INSERT INTO applications (job_id, resume_path, tailored_resume_path, status, notes)
-               VALUES (?, ?, ?, ?, ?)""",
+            """INSERT INTO applications
+               (job_id, resume_path, tailored_resume_path, cover_letter_path, status, notes)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (
                 app_data.get("job_id"),
                 app_data.get("resume_path", ""),
                 app_data.get("tailored_resume_path", ""),
+                app_data.get("cover_letter_path", ""),
                 app_data.get("status", "pending"),
                 app_data.get("notes", ""),
             ),
@@ -151,12 +154,27 @@ async def insert_application(app_data: dict) -> int:
         return cursor.lastrowid
 
 
+async def get_application(app_id: int) -> dict:
+    """Get a single application record with job details."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT a.*, j.title as job_title, j.company, j.url as job_url, j.match_score
+               FROM applications a
+               JOIN jobs j ON a.job_id = j.id
+               WHERE a.id = ?""",
+            (app_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
 async def get_applications(limit: int = 50) -> list:
     """Get application history with job details."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            """SELECT a.*, j.title as job_title, j.company, j.url as job_url
+            """SELECT a.*, j.title as job_title, j.company, j.url as job_url, j.match_score
                FROM applications a
                JOIN jobs j ON a.job_id = j.id
                ORDER BY a.created_at DESC LIMIT ?""",

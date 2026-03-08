@@ -24,6 +24,7 @@ from backend.database import (
     insert_job,
     update_job,
     get_applications,
+    get_application,
     insert_application,
     get_all_settings,
     get_setting,
@@ -35,6 +36,7 @@ from backend.search.serpapi_client import serpapi_client
 from backend.search.job_parser import job_parser
 from backend.resume.latex_parser import LaTeXResumeParser
 from backend.resume.analyzer import resume_analyzer
+from backend.resume.tailor import resume_tailor
 from backend.apply.engine import auto_apply_engine
 
 # ========================
@@ -64,8 +66,18 @@ if FRONTEND_DIR.exists():
 @app.on_event("startup")
 async def startup():
     """Initialize database on startup."""
+    import aiosqlite
     await init_db()
     settings.ensure_dirs()
+    # Migration: add cover_letter_path column if it doesn't exist yet
+    db_path = str(settings.DB_PATH)
+    async with aiosqlite.connect(db_path) as db:
+        try:
+            await db.execute("ALTER TABLE applications ADD COLUMN cover_letter_path TEXT DEFAULT ''")
+            await db.commit()
+            print("[DB] Migrated: added cover_letter_path column")
+        except Exception:
+            pass  # Column already exists — safe to ignore
 
 
 # ========================
@@ -384,6 +396,52 @@ async def get_history(limit: int = 50):
     """Get application history."""
     applications = await get_applications(limit=limit)
     return {"applications": applications, "total": len(applications)}
+
+
+@app.get("/api/applications/{app_id}/cover-letter")
+async def get_cover_letter(app_id: int):
+    """Return the saved cover letter text for an application."""
+    app = await get_application(app_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    cl_path = app.get("cover_letter_path", "")
+    if not cl_path or not Path(cl_path).exists():
+        raise HTTPException(status_code=404, detail="Cover letter file not found")
+
+    text = Path(cl_path).read_text(encoding="utf-8")
+    return {
+        "app_id": app_id,
+        "job_title": app.get("job_title", ""),
+        "company": app.get("company", ""),
+        "cover_letter": text,
+    }
+
+
+@app.get("/api/applications/{app_id}/resume")
+async def get_tailored_resume(app_id: int):
+    """Return the tailored resume content for an application."""
+    app = await get_application(app_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    resume_path = app.get("tailored_resume_path", "") or app.get("resume_path", "")
+    if not resume_path or not Path(resume_path).exists():
+        raise HTTPException(status_code=404, detail="Resume file not found")
+
+    try:
+        content = Path(resume_path).read_text(encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not read resume: {e}")
+
+    return {
+        "app_id": app_id,
+        "job_title": app.get("job_title", ""),
+        "company": app.get("company", ""),
+        "filename": Path(resume_path).name,
+        "is_tailored": app.get("tailored_resume_path", "") != app.get("resume_path", ""),
+        "resume_content": content,
+    }
 
 
 @app.get("/api/stats")
